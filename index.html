@@ -2762,6 +2762,15 @@
             drawNext();
         }
 
+        // Service Worker Registration for PWA/Local Caching
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered:', reg.scope))
+                    .catch(err => console.log('SW Fail:', err));
+            });
+        }
+
         // Export video
         function exportVideo() {
             if (!state.processedBlob) {
