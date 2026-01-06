@@ -1620,7 +1620,7 @@
                         <!-- Toggle Button -->
                         <button id="overlayToggle" class="overlay-btn"
                             style="width: 100%; margin-bottom: 8px; background: rgba(255,255,255,0.1);">
-                            ⚙️ Controles
+                            👁️ Controles
                         </button>
 
                         <!-- Model Selection -->
@@ -2379,6 +2379,17 @@
                 }
             });
 
+            // Overlay Toggle
+            const overlayToggle = document.getElementById('overlayToggle');
+            if (overlayToggle) {
+                overlayToggle.addEventListener('click', () => {
+                    const overlay = document.getElementById('aiStatus');
+                    overlay.classList.toggle('collapsed');
+                    const isCollapsed = overlay.classList.contains('collapsed');
+                    overlayToggle.innerHTML = isCollapsed ? '🙈 Mostrar' : '👁️ Controles';
+                });
+            }
+
             // Trim Controls with Sliders
             const trimStartSlider = document.getElementById('trimStartSlider');
             const trimEndSlider = document.getElementById('trimEndSlider');
@@ -2423,16 +2434,6 @@
             }
 
             // Reset Trim when loading new video (handled in resetAppState)
-
-            // Overlay Toggle
-            const overlayToggle = document.getElementById('overlayToggle');
-            if (overlayToggle) {
-                overlayToggle.addEventListener('click', () => {
-                    const overlay = document.getElementById('aiStatus');
-                    overlay.classList.toggle('collapsed');
-                    overlayToggle.textContent = overlay.classList.contains('collapsed') ? '⚙️ Mostrar' : '⚙️ Controles';
-                });
-            }
 
             video.addEventListener('timeupdate', updateProgress);
 
