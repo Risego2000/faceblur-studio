@@ -3037,7 +3037,9 @@
 
                     // Feedback Visual
                     const pct = Math.round((frameIndex / frames.length) * 100);
-                    elements.modalSubtitle.textContent = `Compilando resultados: ${pct}%`;
+                    const remainingFrames = frames.length - frameIndex;
+                    const remainingSeconds = Math.ceil((remainingFrames * frameDuration) / 1000);
+                    elements.modalSubtitle.textContent = `Compilando resultados: ${pct}% (Faltan ~${remainingSeconds}s)`;
                     elements.modalFill.style.width = pct + '%';
 
                     frameIndex++;
