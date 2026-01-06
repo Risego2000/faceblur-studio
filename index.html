@@ -1174,6 +1174,8 @@
 
     <script>
         // App State
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+
         const state = {
             effect: 'pixelate',
             intensity: 15,
@@ -1187,7 +1189,7 @@
             processingCanceled: false,
             modelReady: false,
             detectorType: null,
-            modelPreference: 'ssd',
+            modelPreference: isMobile ? 'tiny' : 'ssd', // Use Tiny on mobile for better performance
             videoWidth: 0,
             videoHeight: 0,
             lastKnownFaces: [],
