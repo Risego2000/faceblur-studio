@@ -1044,6 +1044,8 @@
         }
 
         .modal-cancel {
+            display: block;
+            margin: 0 auto;
             padding: 10px 24px;
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.2);
@@ -1182,6 +1184,29 @@
 
             .sidebar-section:last-child {
                 border-bottom: none;
+            }
+
+            /* Modal Mobile */
+            .modal {
+                padding: 24px 16px;
+                border-radius: 20px;
+                width: 90%;
+            }
+
+            .modal-title {
+                font-size: 20px;
+            }
+
+            .modal-subtitle {
+                font-size: 13px;
+                margin-bottom: 20px;
+            }
+
+            .modal-spinner {
+                width: 40px;
+                height: 40px;
+                border-width: 3px;
+                margin-bottom: 16px;
             }
         }
 
@@ -1685,11 +1710,11 @@
             <div class="modal-actions" id="modalActions"
                 style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
                 <button class="upload-btn" id="btnDownload" style="width: 100%; border: none; cursor: pointer;">
-                    💾 Guardar en Dispositivo
+                    💾 Guardar
                 </button>
                 <button class="upload-btn" id="btnShare"
                     style="width: 100%; background: var(--bg-hover); border: 1px solid var(--border); cursor: pointer;">
-                    📤 Compartir / Nube
+                    📤 Compartir
                 </button>
             </div>
 
