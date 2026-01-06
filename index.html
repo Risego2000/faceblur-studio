@@ -1639,9 +1639,9 @@
 
             // Configure Detector
             if (loadedModel === 'ssd') {
-                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
+                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
             } else {
-                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: isMobile ? 320 : 512, scoreThreshold: 0.3 });
+                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 });
             }
             state.detectorType = loadedModel;
 
