@@ -1307,21 +1307,25 @@
             border-radius: 20px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             z-index: 5;
             border: 1px solid rgba(255, 255, 255, 0.15);
             transition: all 0.3s ease;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
             width: 280px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
             /* Fixed width for consistency on desktop */
         }
 
         .overlay-params {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            padding-top: 8px;
+            gap: 4px;
+            padding-top: 6px;
             border-top: 1px solid rgba(255, 255, 255, 0.15);
+            max-height: none;
+            overflow: hidden;
         }
 
         .overlay-slider-row {
@@ -1507,12 +1511,6 @@
                 /* Slightly darker for mobile readability */
             }
 
-            .overlay-params {
-                max-height: 200px;
-                /* Compact scrolling area */
-                overflow-y: auto;
-                padding-right: 4px;
-            }
 
             .overlay-controls {
                 flex-wrap: wrap;
@@ -2093,16 +2091,8 @@
                 window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
             } else if (loadedModel === 'tiny') {
                 window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
-            } else if (loadedModel === 'mtcnn') {
-                window.faceDetector = new faceapi.MtcnnOptions({ minFaceSize: 20, scaleFactor: 0.709 });
-            } else if (loadedModel === 'blazeface') {
-                // BlazeFace doesn't use faceapi options
-                window.faceDetector = null;
-            } else if (loadedModel === 'mediapipe') {
-                // MediaPipe uses its own detector
-                window.faceDetector = null;
-            } else if (loadedModel === 'yolo') {
-                // YOLO uses ONNX session
+            } else if (loadedModel === 'blazeface' || loadedModel === 'mediapipe' || loadedModel === 'yolo') {
+                // These models use their own detectors
                 window.faceDetector = null;
             }
             state.detectorType = loadedModel;
@@ -2313,7 +2303,6 @@
                 'auto': 'Selección automática según dispositivo',
                 'ssd': 'Equilibrado: Buena precisión y velocidad (2MB)',
                 'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
-                'mtcnn': 'Requiere modelos adicionales (usa Tiny como alternativa)',
                 'blazeface': 'Ultra rápido: 200+ FPS, muy ligero (100KB)',
                 'mediapipe': 'Google: Optimizado WebAssembly, muy preciso (1MB)',
                 'yolo': 'Profesional: YOLOv8 con GPU, máxima precisión (6MB)'
