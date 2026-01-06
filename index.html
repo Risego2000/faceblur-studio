@@ -1596,15 +1596,18 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        video.setAttribute('webkit-playsinline', 'true'); // Compatibility for older iOS
-        video.style.position = 'fixed';
+        video.setAttribute('webkit-playsinline', 'true');
+        video.style.position = 'absolute'; // Changed from fixed
         video.style.top = '0';
         video.style.left = '0';
-        video.style.width = '100vw'; // Full screen to satisfy "visibility" checks
-        video.style.height = '100vh';
-        video.style.opacity = '0.01'; // Visible but invisible
-        video.style.pointerEvents = 'none';
-        video.style.zIndex = '-9999';
+        video.style.width = '100%'; // Match container
+        video.style.height = '100%';
+        video.style.objectFit = 'contain'; // Match canvas
+        video.style.opacity = '0.01'; // Tiny opacity to be "visible"
+        video.style.zIndex = '-1'; // Behind canvas
+
+        // Append to container if possible, otherwise body (will move in init)
+        // Ideally we append later, but for now let's safely append to body and move it on init
         document.body.appendChild(video);
 
         // Processing canvas
@@ -1623,6 +1626,14 @@
             }
 
             setupEventListeners();
+
+            // Move video to container for proper mobile layer handling
+            if (elements.videoContainer) {
+                elements.videoContainer.appendChild(video);
+                // Also ensure processCanvas is not blocking anything (it's hidden by default but let's be safe)
+                processCanvas.style.display = 'none';
+            }
+
             await loadAI();
         }
 
