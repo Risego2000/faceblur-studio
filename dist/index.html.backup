@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FaceBlur Studio</title>
+    
+    <!-- Face-API Library with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js" onerror="this.onerror=null; this.src='https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js'"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg-dark: #0f0f0f;
+            --bg-card: #1a1a1a;
+            --bg-hover: #252525;
+            --text: #ffffff;
+            --text-muted: #9ca3af;
+            --border: #333;
+            --success: #22c55e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-card);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .logo h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--bg-dark);
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warning, #f59e0b);
+        }
+
+        .status-dot.ready {
+            background: var(--success);
+        }
+
+        /* Main Layout */
+        .app {
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 61px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-card);
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-section {
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-dark);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Effect Options */
+        .effect-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .effect-option {
+            padding: 12px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .effect-option.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .effect-option:hover {
+            border-color: var(--primary);
+        }
+
+        .effect-icon {
+            font-size: 24px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .effect-name {
+            font-size: 12px;
+        }
+
+        /* Slider */
+        .slider-wrapper {
+            margin-top: 8px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Detection/Tracking */
+        .mode-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .mode-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-option.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .mode-icon {
+            font-size: 16px;
+        }
+
+        .mode-name {
+            font-size: 13px;
+            flex: 1;
+        }
+
+        .mode-check {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .mode-option.active .mode-check {
+            opacity: 1;
+        }
+
+        /* Preview Toggle */
+        .preview-toggle {
+            display: flex;
+            gap: 8px;
+        }
+
+        .preview-btn {
+            flex: 1;
+            padding: 10px 8px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preview-btn:hover {
+            border-color: var(--primary);
+        }
+
+        .preview-btn.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text);
+        }
+
+        /* Workspace */
+        .workspace {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: var(--bg-dark);
+            width: 100%;
+            overflow: auto;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            width: 100%;
+            max-width: 400px;
+            padding: 40px 30px;
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-card);
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--primary);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .upload-title {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+
+        .upload-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .upload-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .upload-formats {
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Video Container */
+        #videoContainer {
+            display: none;
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+        }
+
+        #videoContainer.active {
+            display: block;
+        }
+
+        .video-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .video-canvas-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            overflow: hidden;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+            max-height: 60vh;
+            display: block;
+            object-fit: contain;
+            visibility: visible !important;
+        }
+
+        /* Video Controls */
+        .video-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            min-width: 90px;
+        }
+
+        .progress-track {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            border-radius: 3px;
+        }
+
+        /* Header Actions */
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            padding: 8px 12px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            max-width: 380px;
+            width: 100%;
+        }
+
+        .modal-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal-title {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .modal-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-progress {
+            height: 8px;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .modal-progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .modal-percent {
+            font-family: monospace;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .modal-cancel {
+            margin-top: 16px;
+            padding: 8px 20px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .app {
+                flex-direction: row;
+            }
+
+            .sidebar {
+                width: 280px;
+                height: calc(100vh - 61px);
+                border-bottom: none;
+                border-right: 1px solid var(--border);
+                overflow-y: auto;
+                flex-shrink: 0;
+            }
+
+            .sidebar-section {
+                margin-bottom: 20px;
+            }
+
+            .workspace {
+                padding: 30px;
+            }
+
+            .upload-area {
+                padding: 60px 50px;
+            }
+
+            .upload-icon {
+                font-size: 64px;
+            }
+
+            .upload-title {
+                font-size: 24px;
+            }
+
+            .header-actions {
+                display: flex;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .header-actions .header-btn span {
+                display: none;
+            }
+
+            .header-actions {
+                gap: 4px;
+            }
+
+            .header-btn {
+                padding: 8px 10px;
+            }
+
+            .video-controls {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+            }
+
+            .time-display {
+                order: 1;
+                width: 100%;
+                text-align: center;
+                margin-bottom: 8px;
+            }
+
+            .play-btn {
+                order: 2;
+            }
+
+            .progress-track {
+                order: 3;
+                width: calc(100% - 40px - 100px - 24px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .effect-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .mode-list {
+                gap: 4px;
+            }
+
+            .mode-option {
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🎭</div>
+            <h1>FaceBlur</h1>
+        </div>
+        <div class="header-status" id="aiStatus">
+            <div class="status-dot"></div>
+            <span>Cargando IA...</span>
+        </div>
+        <div class="header-actions">
+            <button class="header-btn" id="newBtn"><span>📁</span> <span>Nuevo</span></button>
+            <button class="header-btn" id="exportBtn" disabled><span>💾</span> <span>Exportar</span></button>
+        </div>
+    </header>
+
+    <div class="app">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="section-title">Efecto</div>
+                <div class="effect-grid">
+                    <div class="effect-option active" data-effect="pixelate">
+                        <span class="effect-icon">▦</span>
+                        <span class="effect-name">Pixelado</span>
+                    </div>
+                    <div class="effect-option" data-effect="blur">
+                        <span class="effect-icon">◐</span>
+                        <span class="effect-name">Desenfoque</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">Intensidad</div>
+                <div class="slider-wrapper">
+                    <div class="slider-header">
+                        <span>Nivel</span>
+                        <span id="intensityVal">15</span>
+                    </div>
+                    <input type="range" class="slider" id="intensity" min="5" max="50" value="15">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">Detección</div>
+                <div class="mode-list" id="detectionModes">
+                    <div class="mode-option active" data-mode="all">
+                        <span class="mode-icon">👥</span>
+                        <span class="mode-name">Todos los rostros</span>
+                        <span class="mode-check">✓</span>
+                    </div>
+                    <div class="mode-option" data-mode="single">
+                        <span class="mode-icon">👤</span>
+                        <span class="mode-name">Solo uno</span>
+                        <span class="mode-check">✓</span>
+                    </div>
+                    <div class="mode-option" data-mode="center">
+                        <span class="mode-icon">🎯</span>
+                        <span class="mode-name">Más centrado</span>
+                        <span class="mode-check">✓</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">Preview</div>
+                <div class="preview-toggle">
+                    <button class="preview-btn active" id="previewOriginal">Original</button>
+                    <button class="preview-btn" id="previewEffects">Con Efectos</button>
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+                    Verifica la detección antes de procesar
+                </p>
+            </div>
+
+            <div class="sidebar-section">
+                <button class="btn btn-primary" id="processBtn" disabled>
+                    ⚡ Procesar Video
+                </button>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">
+                    Procesa frame a frame para un resultado perfecto
+                </p>
+            </div>
+        </aside>
+
+        <main class="workspace">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📹</div>
+                <div class="upload-title">Subir Video</div>
+                <div class="upload-subtitle">Selecciona un video para comenzar</div>
+                <div class="upload-btn">Elegir Archivo</div>
+                <div class="upload-formats">MP4, WebM, MOV</div>
+            </div>
+
+            <div id="videoContainer">
+                <div class="video-card">
+                    <div class="video-canvas-wrapper">
+                        <canvas id="renderCanvas"></canvas>
+                    </div>
+                    <div class="video-controls">
+                        <button class="play-btn" id="playBtn">▶</button>
+                        <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+                        <div class="progress-track" id="progressTrack">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <input type="file" id="fileInput" accept="video/*">
+
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <div class="modal-spinner"></div>
+            <div class="modal-title" id="modalTitle">Procesando</div>
+            <div class="modal-subtitle" id="modalSubtitle">Preparando...</div>
+            <div class="modal-progress">
+                <div class="modal-progress-fill" id="modalFill"></div>
+            </div>
+            <div class="modal-percent" id="modalPercent">0%</div>
+            <button class="modal-cancel" id="cancelBtn">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Face-API Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <script>
+        // App State
+        const state = {
+            effect: 'pixelate',
+            intensity: 15,
+            detectionMode: 'all',
+            previewMode: 'original',
+            processedBlob: null,
+            videoBlobUrl: null,
+            isPlaying: false,
+            isProcessing: false,
+            processingCanceled: false,
+            modelReady: false,
+            videoWidth: 0,
+            videoHeight: 0
+        };
+
+        // DOM Elements
+        const elements = {
+            uploadArea: document.getElementById('uploadArea'),
+            fileInput: document.getElementById('fileInput'),
+            videoContainer: document.getElementById('videoContainer'),
+            renderCanvas: document.getElementById('renderCanvas'),
+            renderCtx: document.getElementById('renderCanvas').getContext('2d'),
+            playBtn: document.getElementById('playBtn'),
+            progressFill: document.getElementById('progressFill'),
+            progressTrack: document.getElementById('progressTrack'),
+            timeDisplay: document.getElementById('timeDisplay'),
+            intensitySlider: document.getElementById('intensity'),
+            intensityVal: document.getElementById('intensityVal'),
+            processBtn: document.getElementById('processBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            newBtn: document.getElementById('newBtn'),
+            modal: document.getElementById('modal'),
+            modalFill: document.getElementById('modalFill'),
+            modalPercent: document.getElementById('modalPercent'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalSubtitle: document.getElementById('modalSubtitle'),
+            aiStatus: document.getElementById('aiStatus'),
+            cancelBtn: document.getElementById('cancelBtn'),
+            effectOptions: document.querySelectorAll('.effect-option'),
+            detectionModes: document.querySelectorAll('#detectionModes .mode-option')
+        };
+
+        // Video element (created dynamically)
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.style.display = 'none';
+        document.body.appendChild(video);
+
+        // Processing canvas
+        const processCanvas = document.createElement('canvas');
+        document.body.appendChild(processCanvas);
+
+        // Initialize
+        async function init() {
+            setupEventListeners();
+            await loadAI();
+        }
+
+        // Load AI Model with multiple fallback sources
+        async function loadAI() {
+            const sources = [
+                'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js'
+            ];
+
+            for (const source of sources) {
+                try {
+                    console.log('Intentando cargar Face-API desde:', source);
+                    
+                    // Check if already loaded
+                    if (typeof faceapi !== 'undefined') {
+                        break;
+                    }
+
+                    // Load the script
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = source;
+                        script.onload = resolve;
+                        script.onerror = () => reject(new Error('Script load failed'));
+                        document.head.appendChild(script);
+                    });
+
+                    console.log('Script cargado desde:', source);
+                    
+                    // Wait a moment for the library to initialize
+                    await new Promise(r => setTimeout(r, 500));
+
+                    if (typeof faceapi !== 'undefined') {
+                        break;
+                    }
+                } catch (e) {
+                    console.warn('No se pudo cargar desde', source, ':', e.message);
+                }
+            }
+
+            // Try to load models
+            if (typeof faceapi === 'undefined') {
+                console.error('Face-API no disponible');
+                updateAIStatus(false);
+                return;
+            }
+
+            try {
+                const modelUrls = [
+                    'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/',
+                    'https://justadudewhohacks.github.io/face-api.js/models/'
+                ];
+
+                for (const modelUrl of modelUrls) {
+                    try {
+                        console.log('Cargando modelos desde:', modelUrl);
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
+                        console.log('Modelos cargados desde:', modelUrl);
+                        break;
+                    } catch (e) {
+                        console.warn('No se pudo cargar modelos desde', modelUrl);
+                    }
+                }
+
+                // Create detector
+                window.faceDetector = new faceapi.TinyFaceDetectorOptions({
+                    inputSize: 416,
+                    scoreThreshold: 0.3
+                });
+
+                state.modelReady = true;
+                updateAIStatus(true);
+                console.log('✅ IA cargada correctamente');
+
+            } catch (error) {
+                console.error('Error cargando modelos:', error);
+                updateAIStatus(false);
+            }
+        }
+
+        function updateAIStatus(ready) {
+            const dot = elements.aiStatus.querySelector('.status-dot');
+            const span = elements.aiStatus.querySelector('span');
+            
+            if (ready) {
+                dot.classList.add('ready');
+                span.textContent = 'IA Lista';
+                if (state.videoWidth > 0) {
+                    elements.processBtn.disabled = false;
+                }
+            } else {
+                dot.classList.remove('ready');
+                span.textContent = 'IA No disp.';
+            }
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Upload
+            elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
+            elements.fileInput.addEventListener('change', handleFileSelect);
+
+            // Drag and drop
+            elements.uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                elements.uploadArea.classList.add('dragover');
+            });
+            elements.uploadArea.addEventListener('dragleave', () => {
+                elements.uploadArea.classList.remove('dragover');
+            });
+            elements.uploadArea.addEventListener('drop', handleDrop);
+
+            // Playback
+            elements.playBtn.addEventListener('click', togglePlay);
+            elements.progressTrack.addEventListener('click', seek);
+
+            // Intensity
+            elements.intensitySlider.addEventListener('input', (e) => {
+                state.intensity = parseInt(e.target.value);
+                elements.intensityVal.textContent = state.intensity;
+            });
+
+            // Effect selection
+            elements.effectOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    elements.effectOptions.forEach(o => o.classList.remove('active'));
+                    option.classList.add('active');
+                    state.effect = option.dataset.effect;
+                    renderFrame();
+                });
+            });
+
+            // Detection mode
+            elements.detectionModes.forEach(mode => {
+                mode.addEventListener('click', () => {
+                    elements.detectionModes.forEach(m => m.classList.remove('active'));
+                    mode.classList.add('active');
+                    state.detectionMode = mode.dataset.mode;
+                    renderFrame();
+                });
+            });
+
+            // Preview toggle
+            const previewOriginal = document.getElementById('previewOriginal');
+            const previewEffects = document.getElementById('previewEffects');
+            
+            if (previewOriginal && previewEffects) {
+                previewOriginal.addEventListener('click', () => {
+                    state.previewMode = 'original';
+                    previewOriginal.classList.add('active');
+                    previewEffects.classList.remove('active');
+                    renderFrame();
+                });
+                
+                previewEffects.addEventListener('click', () => {
+                    if (!state.modelReady) {
+                        alert('La IA no está lista aún');
+                        return;
+                    }
+                    state.previewMode = 'effects';
+                    previewOriginal.classList.remove('active');
+                    previewEffects.classList.add('active');
+                    renderFrame();
+                });
+            }
+
+            // Process video
+            elements.processBtn.addEventListener('click', processVideo);
+
+            // Export
+            elements.exportBtn.addEventListener('click', exportVideo);
+
+            // New video
+            elements.newBtn.addEventListener('click', resetApp);
+
+            // Cancel processing
+            elements.cancelBtn.addEventListener('click', () => {
+                state.processingCanceled = true;
+            });
+
+            // Time update
+            video.addEventListener('timeupdate', updateProgress);
+        }
+
+        // File handling
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) loadVideo(file);
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            elements.uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                loadVideo(file);
+            }
+        }
+
+        function loadVideo(file) {
+            if (state.videoBlobUrl) {
+                URL.revokeObjectURL(state.videoBlobUrl);
+            }
+            
+            state.videoBlobUrl = URL.createObjectURL(file);
+            video.src = state.videoBlobUrl;
+
+            video.onloadedmetadata = () => {
+                state.videoWidth = video.videoWidth;
+                state.videoHeight = video.videoHeight;
+
+                // Setup canvases
+                elements.renderCanvas.width = state.videoWidth;
+                elements.renderCanvas.height = state.videoHeight;
+                processCanvas.width = state.videoWidth;
+                processCanvas.height = state.videoHeight;
+
+                console.log('Video cargado:', state.videoWidth, 'x', state.videoHeight);
+
+                // Show video container
+                elements.uploadArea.style.display = 'none';
+                elements.videoContainer.classList.add('active');
+
+                // Force canvas visibility
+                elements.renderCanvas.style.visibility = 'visible';
+                elements.renderCanvas.style.display = 'block';
+
+                // Update UI
+                updateTimeDisplay();
+                renderFrame();
+
+                // Enable process button if AI is ready
+                if (state.modelReady) {
+                    elements.processBtn.disabled = false;
+                }
+            };
+        }
+
+        // Playback controls
+        function togglePlay() {
+            if (video.paused) {
+                video.play();
+                state.isPlaying = true;
+                elements.playBtn.textContent = '⏸';
+                startPreviewLoop();
+            } else {
+                video.pause();
+                state.isPlaying = false;
+                elements.playBtn.textContent = '▶';
+                stopPreviewLoop();
+            }
+        }
+
+        function updateProgress() {
+            const progress = (video.currentTime / video.duration) * 100;
+            elements.progressFill.style.width = progress + '%';
+            updateTimeDisplay();
+        }
+
+        function updateTimeDisplay() {
+            const current = formatTime(video.currentTime);
+            const total = formatTime(video.duration || 0);
+            elements.timeDisplay.textContent = `${current} / ${total}`;
+        }
+
+        function seek(e) {
+            const rect = elements.progressTrack.getBoundingClientRect();
+            const position = (e.clientX - rect.left) / rect.width;
+            video.currentTime = position * video.duration;
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // Preview loop
+        let previewRequestId = null;
+
+        function startPreviewLoop() {
+            function loop() {
+                if (!state.isPlaying) return;
+                renderFrame();
+                previewRequestId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        function stopPreviewLoop() {
+            if (previewRequestId) {
+                cancelAnimationFrame(previewRequestId);
+                previewRequestId = null;
+            }
+        }
+
+        // Render frame
+        function renderFrame() {
+            if (!state.videoWidth) return;
+
+            try {
+                elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+
+                // Only apply effects if preview mode is "effects"
+                if (state.previewMode === 'effects' && state.modelReady && !state.isProcessing) {
+                    applyEffects();
+                }
+            } catch (e) {
+                console.error('Render error:', e);
+            }
+        }
+
+        // Apply effects to detected faces
+        async function applyEffects() {
+            try {
+                // SOLO detectar rostros - usar detectAllFaces que solo detecta rostros
+                const detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                
+                if (detections.length === 0) return;
+
+                // Filtrar detecciones según el modo seleccionado
+                let facesToProcess = filterFaces(detections);
+
+                if (facesToProcess.length === 0) return;
+
+                const scaleX = state.videoWidth / video.videoWidth;
+                const scaleY = state.videoHeight / video.videoHeight;
+
+                facesToProcess.forEach(detection => {
+                    const box = detection.box;
+                    const x = box.x * scaleX;
+                    const y = box.y * scaleY;
+                    const w = box.width * scaleX;
+                    const h = box.height * scaleY;
+
+                    // Validar que las dimensiones corresponden a un rostro (no cuerpo completo)
+                    // Los rostros típicamente tienen una relación aspecto entre 0.6 y 1.0
+                    const aspectRatio = w / h;
+                    const isValidFaceSize = w > 0 && h > 0 && 
+                                           aspectRatio > 0.6 && aspectRatio < 1.0 &&
+                                           w < state.videoWidth * 0.5 && h < state.videoHeight * 0.5;
+                    
+                    if (isValidFaceSize) {
+                        if (state.effect === 'pixelate') {
+                            pixelateArea(elements.renderCtx, x, y, w, h);
+                        } else {
+                            blurArea(elements.renderCtx, x, y, w, h);
+                        }
+                    }
+                });
+
+            } catch (e) {
+                console.error('Detection error:', e);
+            }
+        }
+
+        function filterFaces(detections) {
+            if (state.detectionMode === 'single') {
+                return detections.slice(0, 1);
+            }
+            if (state.detectionMode === 'center') {
+                const centerX = video.videoWidth / 2;
+                const centerY = video.videoHeight / 2;
+                let closestFace = null;
+                let minDistance = Infinity;
+
+                detections.forEach(d => {
+                    const faceCenterX = d.box.x + d.box.width / 2;
+                    const faceCenterY = d.box.y + d.box.height / 2;
+                    const distance = Math.sqrt(
+                        Math.pow(faceCenterX - centerX, 2) + 
+                        Math.pow(faceCenterY - centerY, 2)
+                    );
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestFace = d;
+                    }
+                });
+
+                return closestFace ? [closestFace] : [];
+            }
+            return detections;
+        }
+
+        function pixelateArea(ctx, x, y, w, h) {
+            if (w <= 0 || h <= 0) return;
+            ctx.imageSmoothingEnabled = false;
+            const size = Math.max(1, Math.floor(w / state.intensity));
+            ctx.drawImage(ctx.canvas, x, y, w, h, x, y, size, size);
+            ctx.drawImage(ctx.canvas, x, y, size, size, x, y, w, h);
+        }
+
+        function blurArea(ctx, x, y, w, h) {
+            if (w <= 0 || h <= 0) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            ctx.filter = `blur(${state.intensity}px)`;
+            ctx.drawImage(ctx.canvas, 0, 0);
+            ctx.restore();
+        }
+
+        // Process video
+        async function processVideo() {
+            if (state.isProcessing || !state.modelReady) return;
+
+            state.isProcessing = true;
+            state.processingCanceled = false;
+            
+            video.pause();
+            stopPreviewLoop();
+
+            elements.processBtn.disabled = true;
+            elements.exportBtn.disabled = true;
+            elements.modal.classList.add('active');
+            elements.modalFill.style.width = '0%';
+            elements.modalPercent.textContent = '0%';
+            elements.modalTitle.textContent = 'Procesando Video';
+            elements.modalSubtitle.textContent = 'Detectando rostros y aplicando efectos';
+
+            const duration = video.duration;
+            const fps = video.videoFrameRate || 30;
+            const frameTime = 1 / fps;
+            const ctx = processCanvas.getContext('2d');
+
+            const frames = [];
+            video.currentTime = 0;
+
+            // Wait for video to be ready
+            await new Promise(r => setTimeout(r, 1000));
+
+            const totalFrames = Math.ceil(duration / frameTime);
+            let currentFrame = 0;
+
+            async function seekTo(time) {
+                return new Promise(resolve => {
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        setTimeout(resolve, 50);
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                    video.currentTime = time;
+                    setTimeout(resolve, 2000);
+                });
+            }
+
+            for (let time = 0; time < duration; time += frameTime) {
+                if (state.processingCanceled) {
+                    state.isProcessing = false;
+                    elements.processBtn.disabled = false;
+                    elements.modal.classList.remove('active');
+                    return;
+                }
+
+                await seekTo(time);
+
+                // Draw frame
+                ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+
+                // Detect faces - SOLO rostros
+                try {
+                    const detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                    const facesToProcess = filterFaces(detections);
+
+                    const scaleX = state.videoWidth / video.videoWidth;
+                    const scaleY = state.videoHeight / video.videoHeight;
+
+                    facesToProcess.forEach(detection => {
+                        const box = detection.box;
+                        const x = box.x * scaleX;
+                        const y = box.y * scaleY;
+                        const w = box.width * scaleX;
+                        const h = box.height * scaleY;
+
+                        // Validar que las dimensiones corresponden a un rostro (no cuerpo completo)
+                        // Los rostros típicamente tienen una relación aspecto entre 0.6 y 1.0
+                        const aspectRatio = w / h;
+                        const isValidFaceSize = w > 0 && h > 0 && 
+                                               aspectRatio > 0.6 && aspectRatio < 1.0 &&
+                                               w < state.videoWidth * 0.5 && h < state.videoHeight * 0.5;
+                        
+                        if (isValidFaceSize) {
+                            if (state.effect === 'pixelate') {
+                                pixelateArea(ctx, x, y, w, h);
+                            } else {
+                                blurArea(ctx, x, y, w, h);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error('Frame detection error:', e);
+                }
+
+                // Save frame
+                frames.push(processCanvas.toDataURL('image/jpeg', 0.95));
+                currentFrame++;
+
+                // Update progress
+                const progress = (currentFrame / totalFrames) * 100;
+                elements.modalFill.style.width = progress + '%';
+                elements.modalPercent.textContent = Math.round(progress) + '%';
+                elements.modalSubtitle.textContent = `Frame ${currentFrame} de ${totalFrames}`;
+            }
+
+            // Create final video
+            createFinalVideo(frames, fps);
+        }
+
+        function createFinalVideo(frames, fps) {
+            elements.modalTitle.textContent = 'Generando Video';
+            elements.modalSubtitle.textContent = 'Finalizando...';
+            elements.modalFill.style.width = '100%';
+
+            const canvas = document.createElement('canvas');
+            canvas.width = state.videoWidth;
+            canvas.height = state.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            const stream = canvas.captureStream(fps);
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm;codecs=vp8';
+            }
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm';
+            }
+
+            const recorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 5000000
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = e => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
+
+            recorder.onstop = () => {
+                state.processedBlob = new Blob(chunks, { type: 'video/webm' });
+                state.isProcessing = false;
+                elements.processBtn.disabled = false;
+                elements.exportBtn.disabled = false;
+                elements.modal.classList.remove('active');
+                alert('✅ Video procesado correctamente!\n\nHaz clic en "Exportar" para guardar.');
+            };
+
+            const img = new Image();
+            let frameIndex = 0;
+
+            function drawNext() {
+                if (frameIndex >= frames.length) {
+                    setTimeout(() => recorder.stop(), 500);
+                    return;
+                }
+                img.src = frames[frameIndex];
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    frameIndex++;
+                    setTimeout(drawNext, 1000 / fps);
+                };
+            }
+
+            recorder.start();
+            drawNext();
+        }
+
+        // Export video
+        function exportVideo() {
+            if (!state.processedBlob) {
+                alert('Primero procesa un video');
+                return;
+            }
+            const url = URL.createObjectURL(state.processedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `faceblur_${Date.now()}.webm`;
+            a.click();
+        }
+
+        // Reset app
+        function resetApp() {
+            video.pause();
+            stopPreviewLoop();
+            
+            if (state.videoBlobUrl) {
+                URL.revokeObjectURL(state.videoBlobUrl);
+            }
+
+            state.videoBlobUrl = null;
+            state.processedBlob = null;
+            state.isPlaying = false;
+            state.videoWidth = 0;
+            state.videoHeight = 0;
+
+            elements.uploadArea.style.display = 'block';
+            elements.videoContainer.classList.remove('active');
+            elements.exportBtn.disabled = true;
+            elements.processBtn.disabled = true;
+            elements.fileInput.value = '';
+            elements.progressFill.style.width = '0%';
+            elements.timeDisplay.textContent = '0:00 / 0:00';
+            elements.playBtn.textContent = '▶';
+        }
+
+        // Start app
+        init();
+    </script>
+</body>
+</html>

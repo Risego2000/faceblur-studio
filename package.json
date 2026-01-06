@@ -1,0 +1,12 @@
+{
+  "name": "faceblur-studio",
+  "version": "1.0.0",
+  "description": "视频人脸像素化处理工具",
+  "scripts": {
+    "build": "echo 'No build needed for static HTML files'",
+    "dev": "npx serve ."
+  },
+  "keywords": ["face-detection", "video-processing", "privacy", "pixelation"],
+  "author": "MiniMax Agent",
+  "license": "MIT"
+}
