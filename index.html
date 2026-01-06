@@ -1112,48 +1112,64 @@
         .video-overlay-status {
             position: absolute;
             bottom: 80px;
-            /* Above controls */
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            padding: 8px 16px;
-            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 8px 12px;
+            border-radius: 24px;
             display: flex;
-            align-items: center;
-            gap: 10px;
+            flex-direction: column;
+            gap: 8px;
             z-index: 5;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
             max-width: 90%;
-            white-space: nowrap;
+            min-width: 260px;
         }
 
-        .video-overlay-status .status-dot {
-            width: 8px;
-            height: 8px;
-            flex-shrink: 0;
-            box-shadow: none;
-            /* Simplificado para overlay */
-        }
-
-        .video-overlay-status span {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 500;
-        }
-
-        /* Adjust loading progress inside overlay */
-        .video-overlay-status .loading-progress {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            margin: 0;
-            height: 2px;
-            border-radius: 0 0 20px 20px;
+        .overlay-progress-container {
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
+
+        .progress-row-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 2px;
+        }
+
+        .micro-progress-track {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .video-overlay-status .loading-progress {
+            display: none;
+            /* Hide old bar */
+        }
+
+        .micro-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        /* Success state */
+        .micro-progress-fill.success {
+            background: #10b981;
+            /* Green */
+        }
+
 
         @keyframes indeterminateProgress {
             0% {
@@ -1335,12 +1351,31 @@
                         <!-- Status Info -->
                         <div class="overlay-row">
                             <div class="status-dot"></div>
-                            <span>Cargando IA...</span>
+                            <span id="mainStatusText">Iniciando...</span>
                         </div>
 
-                        <!-- Progress Bar -->
-                        <div class="loading-progress active" id="aiProgress">
-                            <div class="loading-progress-fill indeterminate" id="aiProgressFill"></div>
+                        <!-- Dual Progress Bars -->
+                        <div class="overlay-progress-container">
+                            <!-- Detector -->
+                            <div>
+                                <div class="progress-row-label">
+                                    <span>Detector</span>
+                                    <span id="detStatusText">0%</span>
+                                </div>
+                                <div class="micro-progress-track">
+                                    <div class="micro-progress-fill" id="detFill"></div>
+                                </div>
+                            </div>
+                            <!-- Recognition -->
+                            <div>
+                                <div class="progress-row-label">
+                                    <span>Reconocimiento</span>
+                                    <span id="recStatusText">Pendiente</span>
+                                </div>
+                                <div class="micro-progress-track">
+                                    <div class="micro-progress-fill" id="recFill"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1479,152 +1514,88 @@
         }
 
         // Load AI Model with local files priority
+        // Progress Helpers
+        function updateModelStatus(type, percent, text) {
+            const fill = document.getElementById(`${type}Fill`);
+            const status = document.getElementById(`${type}StatusText`);
+            if (fill) {
+                fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+                if (percent >= 100) fill.classList.add('success');
+            }
+            if (status) status.textContent = text;
+        }
+
+        async function downloadWithProgress(url, onProgress) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const contentLength = +response.headers.get('Content-Length');
+                const reader = response.body.getReader();
+                let receivedLength = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    receivedLength += value.length;
+
+                    if (contentLength) {
+                        onProgress((receivedLength / contentLength) * 100);
+                    }
+                }
+            } catch (e) {
+                // Ignore errors here
+            }
+        }
+
+        async function prefetchFiles(baseUrl, files, updateFn) {
+            let completed = 0;
+            const total = files.length;
+
+            for (const file of files) {
+                updateFn((completed / total) * 100, `Descargando ${file.split('_')[0]}...`);
+                await downloadWithProgress(`${baseUrl}${file}`, (pct) => {
+                    const totalPct = ((completed + (pct / 100)) / total) * 100;
+                    updateFn(totalPct, `Cargando ${Math.round(pct)}%`);
+                });
+                completed++;
+            }
+            updateFn(100, 'Procesando...');
+        }
+
+        // Load AI Model with local files priority
         async function loadAI() {
-            const sources = [
-                './js/face-api.js'
-            ];
-
-            for (const source of sources) {
+            // 1. Load Face-API Script
+            if (typeof faceapi === 'undefined') {
                 try {
-                    console.log('Intentando cargar Face-API desde:', source);
-
-                    // Check if already loaded
-                    if (typeof faceapi !== 'undefined') {
-                        break;
-                    }
-
-                    // Load the script
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement('script');
-                        script.src = source;
-                        script.onload = resolve;
-                        script.onerror = () => reject(new Error('Script load failed'));
-                        document.head.appendChild(script);
-                    });
-
-                    console.log('Script cargado desde:', source);
-
-                    // Wait a moment for the library to initialize
+                    const script = document.createElement('script');
+                    script.src = './js/face-api.js';
+                    document.head.appendChild(script);
+                    await new Promise(r => script.onload = r);
                     await new Promise(r => setTimeout(r, 500));
-
-                    if (typeof faceapi !== 'undefined') {
-                        break;
-                    }
                 } catch (e) {
-                    console.warn('No se pudo cargar desde', source, ':', e.message);
+                    console.error('Failed to load face-api source');
                 }
             }
 
-            // Try to load models
             if (typeof faceapi === 'undefined') {
-                console.error('Face-API no disponible');
-                updateAIStatus(false);
+                document.getElementById('mainStatusText').innerText = 'Error: Face-API no cargó';
                 return;
             }
 
-            try {
-                const modelUrls = [
-                    './models/',
-                    'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/',
-                    'https://justadudewhohacks.github.io/face-api.js/models/'
-                ];
-
-                let loadedModel = null;
-
-                // Stage 1: Try Precision Model (SSD Mobilenet V1)
-                if (state.modelPreference === 'auto' || state.modelPreference === 'ssd') {
-                    console.log('--- Intentando cargar Modelo de Precisión (SSD) ---');
-                    elements.aiStatus.querySelector('span').textContent = 'Cargando SSD...';
-                    updateLoadingProgress(20);
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            console.log('Cargando SSD desde:', modelUrl);
-                            await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
-                            loadedModel = 'ssd';
-                            console.log('✅ SSD Mobilenet V1 cargado correctamente');
-                            break;
-                        } catch (e) {
-                            console.warn('Fallo SSD en:', modelUrl);
-                        }
-                    }
+            state.recognitionReady = true;
+            break;
+        } catch (e) {
+            console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
+        }
                 }
-
-                // Stage 2: Fallback to Light Model (Tiny Face Detector)
-                if (!loadedModel && (state.modelPreference === 'auto' || state.modelPreference === 'tiny')) {
-                    console.log('--- Intentando cargar Modelo Ligero (Tiny) ---');
-                    elements.aiStatus.querySelector('span').textContent = 'Cargando Tiny...';
-                    updateLoadingProgress(20);
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            console.log('Cargando Tiny desde:', modelUrl);
-                            await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
-                            loadedModel = 'tiny';
-                            console.log('✅ Tiny Face Detector cargado');
-                            break;
-                        } catch (e) {
-                            console.warn('Fallo Tiny en:', modelUrl);
-                        }
-                    }
-                }
-
-                if (!loadedModel) {
-                    throw new Error('No se pudo cargar ningún modelo de detección');
-                }
-
-                // Create detector options based on what was loaded
-                if (loadedModel === 'ssd') {
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({
-                        minConfidence: 0.35 // Mayor sensibilidad para detectar caras de inmediato
-                    });
-                } else {
-                    // Optimized for mobile devices
-                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({
-                        inputSize: isMobile ? 416 : 512, // Reduced input size on mobile for speed
-                        scoreThreshold: isMobile ? 0.3 : 0.25 // Slightly higher threshold on mobile for accuracy
-                    });
-                }
-
-                state.detectorType = loadedModel;
-
-                // Load additional models for recognition/tracking
-                elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
-                updateLoadingProgress(50);
-                for (const modelUrl of modelUrls) {
-                    try {
-                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-                        console.log('✅ Modelos de reconocimiento cargados');
-                        break;
-                    } catch (e) {
-                        console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
-                    }
-                }
-
-                state.modelReady = true;
-
-                // Load additional models for recognition/tracking
-                elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
-                updateLoadingProgress(50);
-
-                state.recognitionReady = false;
-                for (const modelUrl of modelUrls) {
-                    try {
-                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-                        console.log('✅ Modelos de reconocimiento cargados');
-                        state.recognitionReady = true;
-                        break;
-                    } catch (e) {
-                        console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
-                    }
-                }
-                updateAIStatus(true);
-                console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
+        updateAIStatus(true);
+        console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
 
             } catch (error) {
-                console.error('Error crítico cargando modelos:', error);
-                updateAIStatus(false);
-            }
+            console.error('Error crítico cargando modelos:', error);
+            updateAIStatus(false);
+        }
         }
 
         function updateAIStatus(ready) {
