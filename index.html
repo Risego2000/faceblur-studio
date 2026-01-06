@@ -41,7 +41,11 @@
 
         html {
             height: 100%;
-            overflow: hidden;
+            height: 100dvh;
+            /* Mobile override */
+            width: 100%;
+            overflow: hidden !important;
+            overscroll-behavior: none !important;
         }
 
         body {
@@ -49,8 +53,16 @@
             background: var(--bg-dark);
             color: var(--text);
             height: 100%;
-            overflow-x: hidden;
+            height: 100dvh;
+            /* Mobile override */
+            width: 100%;
+            overflow: hidden !important;
+            /* Force no scroll */
+            overscroll-behavior: none !important;
             letter-spacing: -0.01em;
+            position: fixed;
+            /* Nuclear option for iOS Safari bounce */
+            inset: 0;
         }
 
         /* Custom Scrollbar */
@@ -246,6 +258,16 @@
             flex: 1;
             height: 1px;
             background: var(--border);
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* Crucial: contain children */
+            position: relative;
+            padding: 24px;
         }
 
         @media (max-width: 767px) {
