@@ -1108,6 +1108,53 @@
             animation: indeterminateProgress 1.5s infinite;
         }
 
+        /* AI Status Overlay */
+        .video-overlay-status {
+            position: absolute;
+            bottom: 80px;
+            /* Above controls */
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+            white-space: nowrap;
+        }
+
+        .video-overlay-status .status-dot {
+            width: 8px;
+            height: 8px;
+            flex-shrink: 0;
+            box-shadow: none;
+            /* Simplificado para overlay */
+        }
+
+        .video-overlay-status span {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        /* Adjust loading progress inside overlay */
+        .video-overlay-status .loading-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            margin: 0;
+            height: 2px;
+            border-radius: 0 0 20px 20px;
+            width: 100%;
+        }
+
         @keyframes indeterminateProgress {
             0% {
                 transform: translateX(-100%);
@@ -1128,13 +1175,6 @@
             <h1>FaceAnon <span
                     style="font-size: 10px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 2px 6px; border-radius: 4px; vertical-align: middle; margin-left: 4px; font-weight: 800; display: inline-block; line-height: 1; opacity: 1 !important; visibility: visible !important;">PRO</span>
             </h1>
-        </div>
-        <div class="header-status" id="aiStatus">
-            <div class="status-dot"></div>
-            <span>Cargando IA...</span>
-            <div class="loading-progress active" id="aiProgress">
-                <div class="loading-progress-fill indeterminate" id="aiProgressFill"></div>
-            </div>
         </div>
         <div class="header-actions">
             <!-- Botones movidos al sidebar -->
@@ -1236,6 +1276,16 @@
                     <div class="video-canvas-wrapper">
                         <canvas id="renderCanvas"></canvas>
                     </div>
+
+                    <!-- AI Status Overlay -->
+                    <div class="video-overlay-status" id="aiStatus">
+                        <div class="status-dot"></div>
+                        <span>Cargando IA...</span>
+                        <div class="loading-progress active" id="aiProgress">
+                            <div class="loading-progress-fill indeterminate" id="aiProgressFill"></div>
+                        </div>
+                    </div>
+
                     <div class="video-controls">
                         <button class="ctrl-btn" id="rewindBtn" title="Atrás 10s">−10s</button>
                         <button class="play-btn" id="playBtn">▶</button>
