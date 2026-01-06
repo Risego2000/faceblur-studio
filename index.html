@@ -1437,18 +1437,32 @@
             gap: 2px;
         }
 
-        /* Mobile Adjustments */
+        /* AI Status Overlay - Default (Desktop: Bottom Left) */
         .video-overlay-status {
-            bottom: 12px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 94%;
-            max-width: 400px;
-            padding: 12px;
-            gap: 10px;
-            border-radius: 24px;
-            background: rgba(0, 0, 0, 0.50) !important;
-            /* 50% Translucent */
+            bottom: 24px;
+            left: 24px;
+            transform: none;
+            width: 280px;
+            max-width: none;
+            padding: 16px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            /* Overlay styles continue... */
+        }
+
+        /* Mobile Adjustments (Centering only on mobile) */
+        @media (max-width: 768px) {
+            .video-overlay-status {
+                bottom: 12px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 94%;
+                max-width: 400px;
+                padding: 12px;
+                border-radius: 24px;
+                background: rgba(0, 0, 0, 0.50) !important;
+                /* 50% Translucent */
+            }
         }
 
         .overlay-btn {
@@ -1635,7 +1649,8 @@
                         <button id="overlayToggle" class="overlay-btn"
                             style="width: 100%; margin-bottom: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; padding: 6px 14px; position: relative;">
                             <span id="overlayToggleText"
-                                style="display: flex; align-items: center; gap: 8px; font-weight: 700;">Controles:</span>
+                                style="display: flex; align-items: center; gap: 8px; font-weight: 700;">⚙️
+                                Controles</span>
                             <span id="toggleIcon"
                                 style="font-size: 14px; opacity: 0.7; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);">⌄</span>
                         </button>
@@ -2241,7 +2256,6 @@
             const statusStr = `IA Lista (${modelName})`;
             document.getElementById('mainStatusText').innerText = statusStr;
             updateAIStatus(true);
-
             // Hide overlay after delay
             setTimeout(() => {
                 const aiStatus = document.getElementById('aiStatus');
@@ -2493,7 +2507,7 @@
                     const toggleText = document.getElementById('overlayToggleText');
 
                     if (toggleIcon) toggleIcon.textContent = isCollapsed ? '⌃' : '⌄';
-                    if (toggleText) toggleText.innerText = isCollapsed ? 'Mostrar Controles' : 'Controles:';
+                    // Text remains static: '⚙️ Controles'
                 });
             }
 
