@@ -2083,8 +2083,7 @@
             state.lastKnownFaces = [];
             state.smoothedBoxes = {};
             state.previewPersistenceCount = 0;
-            // Note: We don't clear state.knownFaces (the list of people) 
-            // because we want to remember who is who for the session.
+            lastDetectionTime = 0; // Ensure next detection runs immediately
         }
 
         // Reset app state when loading new video
@@ -2135,6 +2134,11 @@
         // Playback controls
         function togglePlay() {
             if (video.paused) {
+                // If video ended, restart from beginning
+                if (video.ended || video.currentTime >= video.duration) {
+                    video.currentTime = 0;
+                }
+
                 resetTracking(); // Reset tracking on play start
                 video.play();
                 state.isPlaying = true;
