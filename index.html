@@ -1634,8 +1634,8 @@
                         <!-- Toggle Button -->
                         <button id="overlayToggle" class="overlay-btn"
                             style="width: 100%; margin-bottom: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; padding: 6px 14px;">
-                            <span id="overlayToggleText" style="display: flex; align-items: center; gap: 8px;">⚙️
-                                Controles</span>
+                            <span id="overlayToggleText"
+                                style="display: flex; align-items: center; gap: 8px;">Controles</span>
                             <span id="toggleIcon" style="font-size: 14px; opacity: 0.7;">⌄</span>
                         </button>
 
@@ -2229,7 +2229,15 @@
 
             // Finalize
             state.modelReady = true;
-            document.getElementById('mainStatusText').innerText = 'IA Lista';
+            const modelNames = {
+                'ssd': 'SSD Precision',
+                'tiny': 'Tiny Fast',
+                'blazeface': 'BlazeFace',
+                'faceboxes': 'FaceBoxes',
+                'retinaface': 'RetinaFace'
+            };
+            const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
+            document.getElementById('mainStatusText').innerText = `IA Lista (${modelName})`;
             updateAIStatus(true);
 
             // Hide overlay after delay
@@ -2483,7 +2491,7 @@
                     const toggleText = document.getElementById('overlayToggleText');
 
                     if (toggleIcon) toggleIcon.textContent = isCollapsed ? '⌃' : '⌄';
-                    if (toggleText) toggleText.innerHTML = isCollapsed ? '📁 Mostrar Controles' : '⚙️ Controles';
+                    if (toggleText) toggleText.innerHTML = isCollapsed ? 'Mostrar Controles' : 'Controles';
                 });
             }
 
