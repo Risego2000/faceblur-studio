@@ -1707,7 +1707,8 @@
                 elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
                 // 2. Continuous Background Detection (async, doesn't block rendering)
-                if (state.isPlaying && !state.isProcessing) {
+                // Run detection when playing OR when video is loaded and ready
+                if ((state.isPlaying || state.videoWidth > 0) && !state.isProcessing) {
                     runBackgroundDetection();
                 }
 
@@ -1729,7 +1730,12 @@
         const DETECTION_INTERVAL = isMobile ? 150 : 100; // Throttle detection on mobile (ms)
 
         async function runBackgroundDetection() {
-            if (isDetecting || !state.modelReady) return;
+            if (isDetecting || !state.modelReady) {
+                if (!state.modelReady) {
+                    console.warn('Detection skipped: Model not ready');
+                }
+                return;
+            }
 
             // Throttle detection on mobile for better performance
             const now = Date.now();
@@ -1740,10 +1746,12 @@
 
             isDetecting = true;
             try {
+                console.log('Running face detection...');
                 let detections = await faceapi.detectAllFaces(video, window.faceDetector)
                     .withFaceLandmarks()
                     .withFaceDescriptors();
 
+                console.log(`Detected ${detections.length} faces`);
                 detections = await identifyFaces(detections);
 
                 // Aplicar suavizado de cajas
