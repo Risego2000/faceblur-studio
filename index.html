@@ -597,12 +597,87 @@
             display: inline-block;
             padding: 14px 32px;
             background: var(--primary);
-            color: white;
             border-radius: 12px;
             font-weight: 600;
             font-size: 15px;
             transition: all 0.2s;
             box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        /* Mobile Upload Area Styles */
+        .mobile-upload-area {
+            display: none;
+            /* Componente flex */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 20px;
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .mobile-upload-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border: none;
+            border-radius: 20px;
+            padding: 24px 40px;
+            width: 100%;
+            max-width: 300px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .mobile-upload-btn:active {
+            transform: scale(0.96);
+        }
+
+        /* Switching Logic */
+        .desktop-only {
+            display: block;
+        }
+
+        .mobile-only {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none !important;
+            }
+
+            .mobile-only {
+                display: flex !important;
+            }
+
+            .upload-area {
+                display: none;
+            }
+
+            /* Override classic */
+
+            /* Expand Wrapper */
+            #uploadArea {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+
+        /* Drag Over Handlers on Wrapper */
+        #uploadArea.dragover .desktop-only {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+            transform: scale(1.02);
         }
 
         /* Video Container */
@@ -1376,24 +1451,46 @@
 
 
         <main class="workspace">
-            <div class="upload-area" id="uploadArea">
-                <div class="branding-large"
-                    style="margin-bottom: 24px; display: flex; flex-direction: column; align-items: center;">
-                    <img src="logo.jpg" alt="Logo" class="logo-icon"
-                        style="width: 80px; height: 80px; margin-bottom: 12px; border-radius: 16px; object-fit: cover; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);">
-                    <h1
-                        style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; background: linear-gradient(to bottom, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0;">
-                        FaceAnon <span
-                            style="font-size: 14px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 4px 8px; border-radius: 6px; vertical-align: middle; margin-left: 6px; font-weight: 800; display: inline-block; line-height: 1;">PRO</span>
-                    </h1>
+            <div id="uploadArea">
+                <!-- Desktop Version -->
+                <div class="upload-area desktop-only" id="desktopUploadArea">
+                    <div class="branding-large"
+                        style="margin-bottom: 24px; display: flex; flex-direction: column; align-items: center;">
+                        <img src="logo.jpg" alt="Logo" class="logo-icon"
+                            style="width: 80px; height: 80px; margin-bottom: 12px; border-radius: 16px; object-fit: cover; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);">
+                        <h1
+                            style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; background: linear-gradient(to bottom, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0;">
+                            FaceAnon <span
+                                style="font-size: 14px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 4px 8px; border-radius: 6px; vertical-align: middle; margin-left: 6px; font-weight: 800; display: inline-block; line-height: 1;">PRO</span>
+                        </h1>
+                    </div>
+                    <!-- <div class="upload-icon">✨</div> -->
+                    <h2 class="upload-title">Empieza con tu Video</h2>
+                    <p class="upload-subtitle">
+                        Arrastra tu archivo aquí o usa el botón para explorar.<br>
+                        Formatos soportados: MP4, MOV, WebM.
+                    </p>
+                    <div class="upload-btn">Abrir Archivo</div>
                 </div>
-                <!-- <div class="upload-icon">✨</div> -->
-                <h2 class="upload-title">Empieza con tu Video</h2>
-                <p class="upload-subtitle">
-                    Arrastra tu archivo aquí o usa el botón para explorar.<br>
-                    Formatos soportados: MP4, MOV, WebM.
-                </p>
-                <div class="upload-btn">Abrir Archivo</div>
+
+                <!-- Mobile Version -->
+                <div class="mobile-upload-area mobile-only" id="mobileUploadArea">
+                    <div class="branding-large" style="margin-bottom: 20px; text-align: center;">
+                        <img src="logo.jpg" alt="Logo"
+                            style="width: 100px; height: 100px; border-radius: 20px; margin-bottom: 16px; box-shadow: 0 8px 30px rgba(99, 102, 241, 0.4);">
+                        <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: white;">FaceAnon PRO</h1>
+                        <p style="color: var(--text-muted); margin-top: 8px;">Privacidad de video en tu bolsillo</p>
+                    </div>
+
+                    <button class="mobile-upload-btn">
+                        <span style="font-size: 24px;">📂</span>
+                        <span>Tocar para Abrir Video</span>
+                    </button>
+
+                    <p style="margin-top: 24px; font-size: 12px; color: rgba(255,255,255,0.3);">
+                        Procesamiento 100% Local y Seguro
+                    </p>
+                </div>
             </div>
 
             <div id="videoContainer">
