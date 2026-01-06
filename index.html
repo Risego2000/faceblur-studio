@@ -1137,17 +1137,50 @@
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.85);
             backdrop-filter: blur(12px);
-            padding: 8px 12px;
+            padding: 12px;
             border-radius: 24px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
             z-index: 5;
             border: 1px solid rgba(255, 255, 255, 0.15);
             transition: all 0.3s ease;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-            max-width: 90%;
-            min-width: 260px;
+            max-width: 95%;
+            min-width: 280px;
+        }
+
+        .overlay-params {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .overlay-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .overlay-slider {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .overlay-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
         }
 
         .overlay-progress-container {
@@ -1281,38 +1314,14 @@
 
 
 
+            <!-- Parameters moved to overlay -->
             <div class="sidebar-section">
-                <div class="section-title">Efecto</div>
-                <div class="preview-toggle" id="effectSelection" style="margin-bottom: 12px;">
-                    <button class="preview-btn active" data-effect="pixelate">Pixelado</button>
-                    <button class="preview-btn" data-effect="blur">Desenfoque</button>
-                    <button class="preview-btn" data-effect="solid">Censura</button>
-                </div>
-
-                <div class="section-title" style="margin-top: 16px;">Personas Detectadas</div>
+                <div class="section-title">Personas Detectadas</div>
                 <div id="peopleList" class="people-list"
                     style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px;">
                     <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">
                         Reproduce el vídeo para listar personas...
                     </p>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="section-title">Ajustes de Área</div>
-                <div class="slider-wrapper" style="margin-bottom: 8px;">
-                    <div class="slider-header">
-                        <span>Intensidad</span>
-                        <span id="intensityVal">15</span>
-                    </div>
-                    <input type="range" class="slider" id="intensity" min="5" max="50" value="15">
-                </div>
-                <div class="slider-wrapper">
-                    <div class="slider-header">
-                        <span>Margen/Padding</span>
-                        <span id="paddingVal">10%</span>
-                    </div>
-                    <input type="range" class="slider" id="paddingSlider" min="0" max="100" value="10">
                 </div>
             </div>
 
@@ -1396,6 +1405,27 @@
                                 <div class="micro-progress-track">
                                     <div class="micro-progress-fill" id="recFill"></div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Parameters (Moved from Sidebar) -->
+                        <div class="overlay-params">
+                            <div class="overlay-controls" id="effectSelection" style="justify-content: center;">
+                                <button class="overlay-btn active" data-effect="pixelate">Pixel</button>
+                                <button class="overlay-btn" data-effect="blur">Blur</button>
+                                <button class="overlay-btn" data-effect="solid">Solid</button>
+                            </div>
+
+                            <div class="overlay-slider-row">
+                                <span>Intensidad</span>
+                                <input type="range" class="overlay-slider" id="intensity" min="5" max="50" value="15">
+                                <span id="intensityVal">15</span>
+                            </div>
+                            <div class="overlay-slider-row">
+                                <span>Margen</span>
+                                <input type="range" class="overlay-slider" id="paddingSlider" min="0" max="100"
+                                    value="10">
+                                <span id="paddingVal">10%</span>
                             </div>
                         </div>
                     </div>
