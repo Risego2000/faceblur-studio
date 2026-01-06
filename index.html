@@ -1647,6 +1647,7 @@
                             <button class="overlay-btn" data-model="tiny">Tiny</button>
                             <button class="overlay-btn" data-model="blazeface">BlazeFace</button>
                             <button class="overlay-btn" data-model="mediapipe">MediaPipe</button>
+                            <button class="overlay-btn" data-model="faceboxes">FaceBoxes</button>
                             <button class="overlay-btn" data-model="retinaface">RetinaFace</button>
                         </div>
 
@@ -2124,6 +2125,20 @@
                     } else {
                         throw new Error('RetinaFace no disponible');
                     }
+                } else if (detectorType === 'faceboxes') {
+                    // FaceBoxes (using BlazeFace with optimized settings for CPU)
+                    updateModelStatus('det', 30, 'Cargando FaceBoxes...');
+                    if (typeof blazeface !== 'undefined') {
+                        window.faceboxesModel = await blazeface.load({
+                            maxFaces: 10,
+                            iouThreshold: 0.3,
+                            scoreThreshold: 0.75
+                        });
+                        loadedModel = 'faceboxes';
+                        updateModelStatus('det', 100, 'FaceBoxes Listo');
+                    } else {
+                        throw new Error('FaceBoxes no disponible');
+                    }
                 } else if (detectorType === 'tiny') {
                     // Tiny Face Detector
                     const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
@@ -2179,7 +2194,7 @@
                 window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
             } else if (loadedModel === 'tiny') {
                 window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
-            } else if (loadedModel === 'blazeface' || loadedModel === 'mediapipe' || loadedModel === 'retinaface') {
+            } else if (loadedModel === 'blazeface' || loadedModel === 'mediapipe' || loadedModel === 'retinaface' || loadedModel === 'faceboxes') {
                 // These models use their own detectors
                 window.faceDetector = null;
             }
@@ -2393,6 +2408,7 @@
                 'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
                 'blazeface': 'Ultra rápido: 200+ FPS, muy ligero (100KB)',
                 'mediapipe': 'Google MediaPipe: Precisión y velocidad (1.5MB)',
+                'faceboxes': 'Optimizado CPU: Rápido y eficiente (1.5MB)',
                 'retinaface': 'Máxima precisión: Ángulos difíciles (3MB)'
             };
 
@@ -2889,6 +2905,21 @@
                                 height: pred.box.height
                             },
                             score: pred.score || 0.9
+                        },
+                        identity: null
+                    }));
+                } else if (state.detectorType === 'faceboxes' && window.faceboxesModel) {
+                    // FaceBoxes Detection
+                    const predictions = await window.faceboxesModel.estimateFaces(video, false);
+                    detections = predictions.map(pred => ({
+                        detection: {
+                            box: {
+                                x: pred.topLeft[0],
+                                y: pred.topLeft[1],
+                                width: pred.bottomRight[0] - pred.topLeft[0],
+                                height: pred.bottomRight[1] - pred.topLeft[1]
+                            },
+                            score: pred.probability[0]
                         },
                         identity: null
                     }));
