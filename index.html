@@ -2265,7 +2265,6 @@
 
         function updateAIStatus(ready) {
             const dot = elements.aiStatus.querySelector('.status-dot');
-            const span = elements.aiStatus.querySelector('span');
             const progress = document.getElementById('aiProgress');
 
             if (ready) {
@@ -2278,7 +2277,8 @@
                     'retinaface': 'RetinaFace'
                 };
                 const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
-                span.textContent = `IA Lista (${modelName})`;
+                const statusSpan = document.getElementById('mainStatusText');
+                if (statusSpan) statusSpan.textContent = `IA Lista (${modelName})`;
                 // Hide progress bar when ready
                 if (progress) progress.classList.remove('active');
                 if (state.videoWidth > 0) {
