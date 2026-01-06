@@ -1367,7 +1367,7 @@
             padding: 12px;
             gap: 10px;
             border-radius: 24px;
-            background: rgba(0, 0, 0, 0.50);
+            background: rgba(0, 0, 0, 0.50) !important;
             /* 50% Translucent */
         }
 
@@ -2872,16 +2872,29 @@
             const stream = canvas.captureStream(0);
 
             // Intentar capturar audio del video original
+            // Intentar capturar audio del video original usando Web Audio API (Más robusto para móviles)
             try {
-                let audioStream;
-                if (video.captureStream) audioStream = video.captureStream();
-                else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    const audioCtx = new AudioContext();
+                    const source = audioCtx.createMediaElementSource(video);
+                    const dest = audioCtx.createMediaStreamDestination();
+                    source.connect(dest);
 
-                if (audioStream) {
-                    const audioTracks = audioStream.getAudioTracks();
+                    const audioTracks = dest.stream.getAudioTracks();
                     if (audioTracks.length > 0) {
                         stream.addTrack(audioTracks[0]);
-                        console.log('Audio track added to export stream');
+                        console.log('Audio track added via WebAudio API');
+                    }
+                } else {
+                    // Fallback para navegadores antiguos
+                    let audioStream;
+                    if (video.captureStream) audioStream = video.captureStream();
+                    else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+
+                    if (audioStream) {
+                        const audioTracks = audioStream.getAudioTracks();
+                        if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
                     }
                 }
             } catch (e) {

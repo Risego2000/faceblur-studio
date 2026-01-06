@@ -3,7 +3,7 @@
  * Enables full offline functionality for local AI processing.
  */
 
-const CACHE_NAME = 'faceanon-pro-v6';
+const CACHE_NAME = 'faceanon-pro-v7';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
