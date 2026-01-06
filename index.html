@@ -1037,6 +1037,44 @@
                 max-height: 60px;
             }
         }
+
+        /* Loading Progress Bar */
+        .loading-progress {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .loading-progress.active {
+            display: block;
+        }
+
+        .loading-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .loading-progress-fill.indeterminate {
+            width: 30%;
+            animation: indeterminateProgress 1.5s infinite;
+        }
+
+        @keyframes indeterminateProgress {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(400%);
+            }
+        }
     </style>
 </head>
 
@@ -1052,6 +1090,9 @@
         <div class="header-status" id="aiStatus">
             <div class="status-dot"></div>
             <span>Cargando IA...</span>
+            <div class="loading-progress active" id="aiProgress">
+                <div class="loading-progress-fill indeterminate" id="aiProgressFill"></div>
+            </div>
         </div>
         <div class="header-actions">
             <!-- Botones movidos al sidebar -->
@@ -1324,6 +1365,7 @@
                 if (state.modelPreference === 'auto' || state.modelPreference === 'ssd') {
                     console.log('--- Intentando cargar Modelo de Precisión (SSD) ---');
                     elements.aiStatus.querySelector('span').textContent = 'Cargando SSD...';
+                    updateLoadingProgress(20);
                     for (const modelUrl of modelUrls) {
                         try {
                             console.log('Cargando SSD desde:', modelUrl);
@@ -1341,6 +1383,7 @@
                 if (!loadedModel && (state.modelPreference === 'auto' || state.modelPreference === 'tiny')) {
                     console.log('--- Intentando cargar Modelo Ligero (Tiny) ---');
                     elements.aiStatus.querySelector('span').textContent = 'Cargando Tiny...';
+                    updateLoadingProgress(20);
                     for (const modelUrl of modelUrls) {
                         try {
                             console.log('Cargando Tiny desde:', modelUrl);
@@ -1375,6 +1418,7 @@
 
                 // Load additional models for recognition/tracking
                 elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
+                updateLoadingProgress(50);
                 for (const modelUrl of modelUrls) {
                     try {
                         await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
@@ -1387,6 +1431,7 @@
                 }
 
                 state.modelReady = true;
+                updateLoadingProgress(100);
                 updateAIStatus(true);
                 console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
 
@@ -1399,17 +1444,29 @@
         function updateAIStatus(ready) {
             const dot = elements.aiStatus.querySelector('.status-dot');
             const span = elements.aiStatus.querySelector('span');
+            const progress = document.getElementById('aiProgress');
 
             if (ready) {
                 dot.classList.add('ready');
                 const modelName = state.detectorType === 'ssd' ? 'SSD Precision' : 'Tiny Fast';
                 span.textContent = `IA Lista (${modelName})`;
+                // Hide progress bar when ready
+                if (progress) progress.classList.remove('active');
                 if (state.videoWidth > 0) {
                     elements.processBtn.disabled = false;
                 }
             } else {
                 dot.classList.remove('ready');
                 span.textContent = 'IA No disp.';
+                if (progress) progress.classList.remove('active');
+            }
+        }
+
+        function updateLoadingProgress(percent) {
+            const progressBar = document.getElementById('aiProgressFill');
+            if (progressBar) {
+                progressBar.classList.remove('indeterminate');
+                progressBar.style.width = percent + '%';
             }
         }
 
