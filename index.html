@@ -2293,20 +2293,24 @@
                 }
 
                 results.push({
-                }
+                    detection: detection.detection,
+                    descriptor: detection.descriptor,
+                    identity: bestMatch
+                });
+            }
             return results;
+        }
+
+        // Render People List
+        function renderPeopleList() {
+            if (!elements.peopleList) return;
+
+            if (state.knownFaces.length === 0) {
+                elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+                return;
             }
 
-            // Render People List
-            function renderPeopleList() {
-                if (!elements.peopleList) return;
-
-                if (state.knownFaces.length === 0) {
-                    elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
-                    return;
-                }
-
-                elements.peopleList.innerHTML = state.knownFaces.map(person => `
+            elements.peopleList.innerHTML = state.knownFaces.map(person => `
                 <div class="person-item ${person.excluded ? 'excluded' : ''} ${state.highlightedPersonId === person.id ? 'active' : ''}" 
                      data-id="${person.id}">
                     <div class="person-avatar" style="background-image: url('${person.avatar || ''}')">
@@ -2324,339 +2328,339 @@
                 </div>
             `).join('');
 
-                // Add listeners
-                document.querySelectorAll('.person-item').forEach(item => {
-                    item.addEventListener('mouseenter', () => state.highlightedPersonId = parseFloat(item.dataset.id));
-                    item.addEventListener('mouseleave', () => state.highlightedPersonId = null);
+            // Add listeners
+            document.querySelectorAll('.person-item').forEach(item => {
+                item.addEventListener('mouseenter', () => state.highlightedPersonId = parseFloat(item.dataset.id));
+                item.addEventListener('mouseleave', () => state.highlightedPersonId = null);
 
-                    const toggleBtn = item.querySelector('.toggle-btn');
-                    toggleBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const id = parseFloat(item.dataset.id);
-                        const person = state.knownFaces.find(p => p.id === id);
-                        if (person) {
-                            person.excluded = !person.excluded;
-                            renderPeopleList();
-                        }
-                    });
+                const toggleBtn = item.querySelector('.toggle-btn');
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = parseFloat(item.dataset.id);
+                    const person = state.knownFaces.find(p => p.id === id);
+                    if (person) {
+                        person.excluded = !person.excluded;
+                        renderPeopleList();
+                    }
+                });
+            });
+        }
+
+        // Apply effects (used mainly for paused/immediate updates)
+        async function applyEffects() {
+            if (isDetecting || !state.modelReady) return;
+            await runBackgroundDetection();
+            drawCachedEffects();
+        }
+
+        function filterFaces(detections) {
+            return detections;
+        }
+
+        function pixelateArea(ctx, x, y, w, h) {
+            if (w <= 0 || h <= 0) return;
+            ctx.imageSmoothingEnabled = false;
+            const size = Math.max(1, Math.floor(w / state.intensity));
+            ctx.drawImage(ctx.canvas, x, y, w, h, x, y, size, size);
+            ctx.drawImage(ctx.canvas, x, y, size, size, x, y, w, h);
+        }
+
+        function blurArea(ctx, x, y, w, h) {
+            if (w <= 0 || h <= 0) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            ctx.filter = `blur(${state.intensity}px)`;
+            ctx.drawImage(ctx.canvas, 0, 0);
+            ctx.restore();
+        }
+
+        function solidArea(ctx, x, y, w, h) {
+            if (w <= 0 || h <= 0) return;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x, y, w, h);
+        }
+
+        // Process video
+        async function processVideo() {
+            if (state.isProcessing || !state.modelReady) return;
+
+            state.isProcessing = true;
+            state.processingCanceled = false;
+
+            video.pause();
+            stopPreviewLoop();
+
+            elements.processBtn.disabled = true;
+            elements.exportBtn.disabled = true;
+            elements.modal.classList.add('active');
+            elements.modalFill.style.width = '0%';
+            elements.modalPercent.textContent = '0%';
+            elements.modalTitle.textContent = 'Procesando Video';
+            elements.modalSubtitle.textContent = 'Analizando frames con alta precisión...';
+
+            const duration = video.duration;
+            // Estimar FPS o usar 30 por defecto. Face-API funciona mejor con un ritmo constante.
+            const fps = 30;
+            const frameTime = 1 / fps;
+            const ctx = processCanvas.getContext('2d', { willReadFrequently: true });
+
+            const frames = [];
+            video.currentTime = 0;
+
+            // Wait for video to be stable
+            await new Promise(r => setTimeout(r, 1000));
+
+            const totalFrames = Math.ceil(duration / frameTime);
+            let currentFrame = 0;
+
+            async function seekTo(time) {
+                return new Promise(resolve => {
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        setTimeout(resolve, 30);
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                    video.currentTime = time;
+                    setTimeout(() => {
+                        video.removeEventListener('seeked', onSeeked);
+                        resolve();
+                    }, 2000);
                 });
             }
 
-            // Apply effects (used mainly for paused/immediate updates)
-            async function applyEffects() {
-                if (isDetecting || !state.modelReady) return;
-                await runBackgroundDetection();
-                drawCachedEffects();
-            }
+            let lastKnownFaces = [];
+            let persistenceCounter = 0;
+            const MAX_PERSISTENCE = 6; // Mantener detecciones durante 6 frames si se pierden
 
-            function filterFaces(detections) {
-                return detections;
-            }
-
-            function pixelateArea(ctx, x, y, w, h) {
-                if (w <= 0 || h <= 0) return;
-                ctx.imageSmoothingEnabled = false;
-                const size = Math.max(1, Math.floor(w / state.intensity));
-                ctx.drawImage(ctx.canvas, x, y, w, h, x, y, size, size);
-                ctx.drawImage(ctx.canvas, x, y, size, size, x, y, w, h);
-            }
-
-            function blurArea(ctx, x, y, w, h) {
-                if (w <= 0 || h <= 0) return;
-                ctx.save();
-                ctx.beginPath();
-                ctx.rect(x, y, w, h);
-                ctx.clip();
-                ctx.filter = `blur(${state.intensity}px)`;
-                ctx.drawImage(ctx.canvas, 0, 0);
-                ctx.restore();
-            }
-
-            function solidArea(ctx, x, y, w, h) {
-                if (w <= 0 || h <= 0) return;
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(x, y, w, h);
-            }
-
-            // Process video
-            async function processVideo() {
-                if (state.isProcessing || !state.modelReady) return;
-
-                state.isProcessing = true;
-                state.processingCanceled = false;
-
-                video.pause();
-                stopPreviewLoop();
-
-                elements.processBtn.disabled = true;
-                elements.exportBtn.disabled = true;
-                elements.modal.classList.add('active');
-                elements.modalFill.style.width = '0%';
-                elements.modalPercent.textContent = '0%';
-                elements.modalTitle.textContent = 'Procesando Video';
-                elements.modalSubtitle.textContent = 'Analizando frames con alta precisión...';
-
-                const duration = video.duration;
-                // Estimar FPS o usar 30 por defecto. Face-API funciona mejor con un ritmo constante.
-                const fps = 30;
-                const frameTime = 1 / fps;
-                const ctx = processCanvas.getContext('2d', { willReadFrequently: true });
-
-                const frames = [];
-                video.currentTime = 0;
-
-                // Wait for video to be stable
-                await new Promise(r => setTimeout(r, 1000));
-
-                const totalFrames = Math.ceil(duration / frameTime);
-                let currentFrame = 0;
-
-                async function seekTo(time) {
-                    return new Promise(resolve => {
-                        const onSeeked = () => {
-                            video.removeEventListener('seeked', onSeeked);
-                            setTimeout(resolve, 30);
-                        };
-                        video.addEventListener('seeked', onSeeked);
-                        video.currentTime = time;
-                        setTimeout(() => {
-                            video.removeEventListener('seeked', onSeeked);
-                            resolve();
-                        }, 2000);
-                    });
+            for (let time = 0; time < duration; time += frameTime) {
+                if (state.processingCanceled) {
+                    state.isProcessing = false;
+                    elements.processBtn.disabled = false;
+                    elements.modal.classList.remove('active');
+                    return;
                 }
 
-                let lastKnownFaces = [];
-                let persistenceCounter = 0;
-                const MAX_PERSISTENCE = 6; // Mantener detecciones durante 6 frames si se pierden
+                await seekTo(time);
 
-                for (let time = 0; time < duration; time += frameTime) {
-                    if (state.processingCanceled) {
-                        state.isProcessing = false;
-                        elements.processBtn.disabled = false;
-                        elements.modal.classList.remove('active');
-                        return;
+                // Dibujar el frame original
+                ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+
+                // Detección exhaustiva con reconocimiento
+                try {
+                    let detections;
+
+                    // Use full detection if recognition is ready, otherwise basic
+                    if (!state.recognitionReady) {
+                        detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                        // Convert to format expected by rest of code
+                        detections = detections.map(d => ({
+                            detection: d,
+                            identity: null
+                        }));
+                    } else {
+                        detections = await faceapi.detectAllFaces(video, window.faceDetector)
+                            .withFaceLandmarks()
+                            .withFaceDescriptors();
+                        detections = await identifyFaces(detections);
                     }
 
-                    await seekTo(time);
+                    let facesToProcess = filterFaces(detections);
 
-                    // Dibujar el frame original
-                    ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+                    // Persistencia Temporal Mejorada: Evita frames "limpios" por fallos momentáneos de la IA
+                    if (facesToProcess.length === 0 && persistenceCounter > 0) {
+                        facesToProcess = lastKnownFaces;
+                        persistenceCounter--;
+                    } else if (facesToProcess.length > 0) {
+                        lastKnownFaces = facesToProcess;
+                        persistenceCounter = MAX_PERSISTENCE;
+                    } else {
+                        lastKnownFaces = [];
+                    }
 
-                    // Detección exhaustiva con reconocimiento
-                    try {
-                        let detections;
+                    // Suavizado para un tracking "exacto" y fluido
+                    const refined = facesToProcess.map(d => {
+                        return { ...d, smoothedBox: smoothBoundingBox(d) };
+                    });
 
-                        // Use full detection if recognition is ready, otherwise basic
-                        if (!state.recognitionReady) {
-                            detections = await faceapi.detectAllFaces(video, window.faceDetector);
-                            // Convert to format expected by rest of code
-                            detections = detections.map(d => ({
-                                detection: d,
-                                identity: null
-                            }));
+                    const scaleX = state.videoWidth / video.videoWidth;
+                    const scaleY = state.videoHeight / video.videoHeight;
+
+                    refined.forEach(detection => {
+                        // Skip if person is excluded
+                        if (detection.identity && detection.identity.excluded) return;
+
+                        const box = detection.smoothedBox || (detection.detection ? detection.detection.box : null);
+                        if (!box) return;
+
+                        const padding = state.padding;
+                        const x = Math.max(0, (box.x - (box.width * padding)) * scaleX);
+                        const y = Math.max(0, (box.y - (box.height * padding)) * scaleY);
+                        const w = Math.min(state.videoWidth - x, (box.width * (1 + padding * 2)) * scaleX);
+                        const h = Math.min(state.videoHeight - y, (box.height * (1 + padding * 2)) * scaleY);
+
+                        if (state.effect === 'pixelate') {
+                            pixelateArea(ctx, x, y, w, h);
+                        } else if (state.effect === 'blur') {
+                            blurArea(ctx, x, y, w, h);
                         } else {
-                            detections = await faceapi.detectAllFaces(video, window.faceDetector)
-                                .withFaceLandmarks()
-                                .withFaceDescriptors();
-                            detections = await identifyFaces(detections);
+                            solidArea(ctx, x, y, w, h);
                         }
-
-                        let facesToProcess = filterFaces(detections);
-
-                        // Persistencia Temporal Mejorada: Evita frames "limpios" por fallos momentáneos de la IA
-                        if (facesToProcess.length === 0 && persistenceCounter > 0) {
-                            facesToProcess = lastKnownFaces;
-                            persistenceCounter--;
-                        } else if (facesToProcess.length > 0) {
-                            lastKnownFaces = facesToProcess;
-                            persistenceCounter = MAX_PERSISTENCE;
-                        } else {
-                            lastKnownFaces = [];
-                        }
-
-                        // Suavizado para un tracking "exacto" y fluido
-                        const refined = facesToProcess.map(d => {
-                            return { ...d, smoothedBox: smoothBoundingBox(d) };
-                        });
-
-                        const scaleX = state.videoWidth / video.videoWidth;
-                        const scaleY = state.videoHeight / video.videoHeight;
-
-                        refined.forEach(detection => {
-                            // Skip if person is excluded
+                    });
+                } catch (e) {
+                    console.error('Frame detection error:', e);
+                    // Si hay error, intentar usar las últimas conocidas para no dejar el frame "limpio"
+                    if (lastKnownFaces.length > 0) {
+                        lastKnownFaces.forEach(detection => {
                             if (detection.identity && detection.identity.excluded) return;
 
-                            const box = detection.smoothedBox || (detection.detection ? detection.detection.box : null);
+                            const box = detection.box || (detection.detection ? detection.detection.box : null);
                             if (!box) return;
 
+                            const scaleX = state.videoWidth / video.videoWidth;
+                            const scaleY = state.videoHeight / video.videoHeight;
                             const padding = state.padding;
                             const x = Math.max(0, (box.x - (box.width * padding)) * scaleX);
                             const y = Math.max(0, (box.y - (box.height * padding)) * scaleY);
                             const w = Math.min(state.videoWidth - x, (box.width * (1 + padding * 2)) * scaleX);
                             const h = Math.min(state.videoHeight - y, (box.height * (1 + padding * 2)) * scaleY);
 
-                            if (state.effect === 'pixelate') {
-                                pixelateArea(ctx, x, y, w, h);
-                            } else if (state.effect === 'blur') {
-                                blurArea(ctx, x, y, w, h);
-                            } else {
-                                solidArea(ctx, x, y, w, h);
-                            }
+                            if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
+                            else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
+                            else solidArea(ctx, x, y, w, h);
                         });
-                    } catch (e) {
-                        console.error('Frame detection error:', e);
-                        // Si hay error, intentar usar las últimas conocidas para no dejar el frame "limpio"
-                        if (lastKnownFaces.length > 0) {
-                            lastKnownFaces.forEach(detection => {
-                                if (detection.identity && detection.identity.excluded) return;
-
-                                const box = detection.box || (detection.detection ? detection.detection.box : null);
-                                if (!box) return;
-
-                                const scaleX = state.videoWidth / video.videoWidth;
-                                const scaleY = state.videoHeight / video.videoHeight;
-                                const padding = state.padding;
-                                const x = Math.max(0, (box.x - (box.width * padding)) * scaleX);
-                                const y = Math.max(0, (box.y - (box.height * padding)) * scaleY);
-                                const w = Math.min(state.videoWidth - x, (box.width * (1 + padding * 2)) * scaleX);
-                                const h = Math.min(state.videoHeight - y, (box.height * (1 + padding * 2)) * scaleY);
-
-                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
-                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
-                                else solidArea(ctx, x, y, w, h);
-                            });
-                        }
                     }
-
-                    // Guardar frame procesado con alta calidad
-                    frames.push(processCanvas.toDataURL('image/jpeg', 0.95));
-                    currentFrame++;
-
-                    // Update progress UI
-                    const progress = (currentFrame / totalFrames) * 100;
-                    elements.modalFill.style.width = progress + '%';
-                    elements.modalPercent.textContent = Math.round(progress) + '%';
-                    elements.modalSubtitle.textContent = `Frame ${currentFrame} de ${totalFrames} (${Math.round(time * 10) / 10}s)`;
                 }
 
-                // Create final video
-                createFinalVideo(frames, fps);
+                // Guardar frame procesado con alta calidad
+                frames.push(processCanvas.toDataURL('image/jpeg', 0.95));
+                currentFrame++;
+
+                // Update progress UI
+                const progress = (currentFrame / totalFrames) * 100;
+                elements.modalFill.style.width = progress + '%';
+                elements.modalPercent.textContent = Math.round(progress) + '%';
+                elements.modalSubtitle.textContent = `Frame ${currentFrame} de ${totalFrames} (${Math.round(time * 10) / 10}s)`;
             }
 
-            function createFinalVideo(frames, fps) {
-                elements.modalTitle.textContent = 'Generando Video';
-                elements.modalSubtitle.textContent = 'Compilando resultados con fluidez...';
-                elements.modalFill.style.width = '100%';
+            // Create final video
+            createFinalVideo(frames, fps);
+        }
 
-                const canvas = document.createElement('canvas');
-                canvas.width = state.videoWidth;
-                canvas.height = state.videoHeight;
-                const ctx = canvas.getContext('2d');
+        function createFinalVideo(frames, fps) {
+            elements.modalTitle.textContent = 'Generando Video';
+            elements.modalSubtitle.textContent = 'Compilando resultados con fluidez...';
+            elements.modalFill.style.width = '100%';
 
-                // 0 indica que capturamos frames manualmente vía requestFrame()
-                const stream = canvas.captureStream(0);
+            const canvas = document.createElement('canvas');
+            canvas.width = state.videoWidth;
+            canvas.height = state.videoHeight;
+            const ctx = canvas.getContext('2d');
 
-                let mimeType = 'video/webm;codecs=vp9';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            // 0 indica que capturamos frames manualmente vía requestFrame()
+            const stream = canvas.captureStream(0);
 
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: mimeType,
-                    videoBitsPerSecond: 8000000 // 8 Mbps para excelente calidad
-                });
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
 
-                const chunks = [];
-                recorder.ondataavailable = e => {
-                    if (e.data.size > 0) chunks.push(e.data);
-                };
+            const recorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 8000000 // 8 Mbps para excelente calidad
+            });
 
-                recorder.onstop = () => {
-                    state.processedBlob = new Blob(chunks, { type: 'video/webm' });
-                    state.isProcessing = false;
-                    elements.processBtn.disabled = false;
-                    elements.exportBtn.disabled = false;
-                    elements.modal.classList.remove('active');
-                    alert('✅ Video procesado correctamente!\n\nLa duración y fluidez coinciden con el original.');
-                };
+            const chunks = [];
+            recorder.ondataavailable = e => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
 
-                recorder.start();
+            recorder.onstop = () => {
+                state.processedBlob = new Blob(chunks, { type: 'video/webm' });
+                state.isProcessing = false;
+                elements.processBtn.disabled = false;
+                elements.exportBtn.disabled = false;
+                elements.modal.classList.remove('active');
+                alert('✅ Video procesado correctamente!\n\nLa duración y fluidez coinciden con el original.');
+            };
 
-                const img = new Image();
-                let frameIndex = 0;
-                const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
+            recorder.start();
 
-                function drawNext() {
-                    if (frameIndex >= frames.length) {
-                        // Dar tiempo al encoder para finalizar
-                        setTimeout(() => recorder.stop(), 500);
-                        return;
-                    }
+            const img = new Image();
+            let frameIndex = 0;
+            const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
 
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0);
-                        // Forzar la grabación de este frame exacto en el stream
-                        const track = stream.getVideoTracks()[0];
-                        if (track && track.requestFrame) {
-                            track.requestFrame();
-                        }
-
-                        frameIndex++;
-                        // Usamos el intervalo correspondiente al FPS para mantener la duración original
-                        setTimeout(drawNext, frameDuration);
-                    };
-                    img.src = frames[frameIndex];
-                }
-
-                drawNext();
-            }
-
-            // Export video
-            function exportVideo() {
-                if (!state.processedBlob) {
-                    alert('Primero procesa un video');
+            function drawNext() {
+                if (frameIndex >= frames.length) {
+                    // Dar tiempo al encoder para finalizar
+                    setTimeout(() => recorder.stop(), 500);
                     return;
                 }
-                const url = URL.createObjectURL(state.processedBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `faceanon_${Date.now()}.webm`;
-                a.click();
+
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    // Forzar la grabación de este frame exacto en el stream
+                    const track = stream.getVideoTracks()[0];
+                    if (track && track.requestFrame) {
+                        track.requestFrame();
+                    }
+
+                    frameIndex++;
+                    // Usamos el intervalo correspondiente al FPS para mantener la duración original
+                    setTimeout(drawNext, frameDuration);
+                };
+                img.src = frames[frameIndex];
             }
 
-            // Reset app
-            function resetApp() {
-                video.pause();
-                stopPreviewLoop();
+            drawNext();
+        }
 
-                if (state.videoBlobUrl) {
-                    URL.revokeObjectURL(state.videoBlobUrl);
-                }
+        // Export video
+        function exportVideo() {
+            if (!state.processedBlob) {
+                alert('Primero procesa un video');
+                return;
+            }
+            const url = URL.createObjectURL(state.processedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `faceanon_${Date.now()}.webm`;
+            a.click();
+        }
 
-                state.videoBlobUrl = null;
-                state.processedBlob = null;
-                state.isPlaying = false;
-                state.videoWidth = 0;
-                state.videoHeight = 0;
-                state.knownFaces = [];
-                state.lastKnownFaces = [];
-                state.smoothedBoxes = {};
-                if (elements.peopleList) {
-                    elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
-                }
+        // Reset app
+        function resetApp() {
+            video.pause();
+            stopPreviewLoop();
 
-                elements.uploadArea.style.display = 'block';
-                elements.videoContainer.classList.remove('active');
-                elements.exportBtn.disabled = true;
-                elements.processBtn.disabled = true;
-                elements.fileInput.value = '';
-                elements.progressFill.style.width = '0%';
-                elements.timeDisplay.textContent = '0:00 / 0:00';
-                elements.playBtn.textContent = '▶';
+            if (state.videoBlobUrl) {
+                URL.revokeObjectURL(state.videoBlobUrl);
             }
 
-            // Start app
-            init();
+            state.videoBlobUrl = null;
+            state.processedBlob = null;
+            state.isPlaying = false;
+            state.videoWidth = 0;
+            state.videoHeight = 0;
+            state.knownFaces = [];
+            state.lastKnownFaces = [];
+            state.smoothedBoxes = {};
+            if (elements.peopleList) {
+                elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+            }
+
+            elements.uploadArea.style.display = 'block';
+            elements.videoContainer.classList.remove('active');
+            elements.exportBtn.disabled = true;
+            elements.processBtn.disabled = true;
+            elements.fileInput.value = '';
+            elements.progressFill.style.width = '0%';
+            elements.timeDisplay.textContent = '0:00 / 0:00';
+            elements.playBtn.textContent = '▶';
+        }
+
+        // Start app
+        init();
     </script>
 </body>
 
