@@ -1164,6 +1164,68 @@
                 transform: translateX(400%);
             }
         }
+
+        /* Overlay Controls Styles */
+        .overlay-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .overlay-controls {
+            display: flex;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .overlay-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .overlay-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .video-overlay-status .status-dot {
+            width: 6px;
+            height: 6px;
+            flex-shrink: 0;
+            box-shadow: none;
+        }
+
+        .video-overlay-status span {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+            margin-left: 6px;
+        }
+
+        /* Adjust loading progress inside overlay */
+        .video-overlay-status .loading-progress {
+            margin-top: 4px;
+            height: 2px;
+            border-radius: 1px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            position: relative;
+            bottom: auto;
+            left: auto;
+        }
     </style>
 </head>
 
@@ -1187,14 +1249,7 @@
                 <button class="btn btn-primary" id="newBtn" style="margin-bottom: 0;">📁 Nuevo Video</button>
             </div>
 
-            <div class="sidebar-section">
-                <div class="section-title">Modelo IA</div>
-                <div class="preview-toggle" id="modelSelection">
-                    <button class="preview-btn active" data-model="auto">Auto</button>
-                    <button class="preview-btn" data-model="ssd">SSD Prec.</button>
-                    <button class="preview-btn" data-model="tiny">Tiny Fast</button>
-                </div>
-            </div>
+
 
 
 
@@ -1279,8 +1334,20 @@
 
                     <!-- AI Status Overlay -->
                     <div class="video-overlay-status" id="aiStatus">
-                        <div class="status-dot"></div>
-                        <span>Cargando IA...</span>
+                        <!-- Model Selection -->
+                        <div class="overlay-controls" id="modelSelection">
+                            <button class="overlay-btn active" data-model="auto">Auto</button>
+                            <button class="overlay-btn" data-model="ssd">SSD</button>
+                            <button class="overlay-btn" data-model="tiny">Tiny</button>
+                        </div>
+
+                        <!-- Status Info -->
+                        <div class="overlay-row">
+                            <div class="status-dot"></div>
+                            <span>Cargando IA...</span>
+                        </div>
+
+                        <!-- Progress Bar -->
                         <div class="loading-progress active" id="aiProgress">
                             <div class="loading-progress-fill indeterminate" id="aiProgressFill"></div>
                         </div>
