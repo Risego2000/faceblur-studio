@@ -1638,16 +1638,21 @@
                         </button>
 
                         <!-- Model Selection -->
-                        <div style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">Modelo de
-                            Inteligencia Artificial de Detección de Rostros:</div>
-                        <div class="overlay-controls" id="modelSelection"
-                            style="flex-wrap: wrap; justify-content: center;">
-                            <button class="overlay-btn active" data-model="auto">Auto</button>
-                            <button class="overlay-btn" data-model="ssd">SSD</button>
-                            <button class="overlay-btn" data-model="tiny">Tiny</button>
-                            <button class="overlay-btn" data-model="blazeface">BlazeFace</button>
-                            <button class="overlay-btn" data-model="faceboxes">FaceBoxes</button>
-                            <button class="overlay-btn" data-model="retinaface">RetinaFace</button>
+                        <div id="modelSelection">
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                                <div style="font-size: 10px; color: rgba(255,255,255,0.8);">Modelo de Inteligencia
+                                    Artificial de Detección de Rostros:</div>
+                                <button class="overlay-btn active" data-model="auto"
+                                    style="margin: 0; padding: 2px 8px; font-size: 9px; min-width: auto; height: auto; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Auto</button>
+                            </div>
+                            <div class="overlay-controls" style="flex-wrap: wrap; justify-content: center;">
+                                <button class="overlay-btn" data-model="ssd">SSD</button>
+                                <button class="overlay-btn" data-model="tiny">Tiny</button>
+                                <button class="overlay-btn" data-model="blazeface">BlazeFace</button>
+                                <button class="overlay-btn" data-model="faceboxes">FaceBoxes</button>
+                                <button class="overlay-btn" data-model="retinaface">RetinaFace</button>
+                            </div>
                         </div>
 
                         <!-- Model Description -->
