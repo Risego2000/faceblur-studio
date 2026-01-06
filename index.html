@@ -2010,6 +2010,13 @@
                 console.log('Video ended: Stopped detection loop');
             });
 
+            // Universal Seek Update: Update effect/detection whenever time changes (manual seek)
+            video.addEventListener('seeked', () => {
+                if (video.paused && state.modelReady && !state.isProcessing) {
+                    applyEffects();
+                }
+            });
+
             // Mobile Menu
             if (elements.menuToggle) {
                 elements.menuToggle.addEventListener('click', () => {
