@@ -1692,6 +1692,8 @@
             document.getElementById('mainStatusText').innerText = 'Iniciando Motores IA...';
 
             // --- STAGE 1: DETECTOR ---
+            // Allow full model selection on mobile if user chooses explicitly.
+            // Only default to Tiny if no preference is set AND on mobile.
             const useTiny = (state.modelPreference === 'auto' && isMobile) || state.modelPreference === 'tiny';
             const detectorFiles = useTiny ?
                 ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'] :
