@@ -1393,7 +1393,7 @@
                     Arrastra tu archivo aquí o usa el botón para explorar.<br>
                     Formatos soportados: MP4, MOV, WebM.
                 </p>
-                <div class="upload-btn">Abrir Archivo</div>
+                <div class="upload-btn" onclick="document.getElementById('fileInput').click()">Abrir Archivo</div>
             </div>
 
             <div id="videoContainer">
@@ -2887,7 +2887,7 @@
         }
 
         // Reset app
-        function resetApp() {
+        function resetAppState() {
             video.pause();
             stopPreviewLoop();
 
@@ -2906,6 +2906,7 @@
             if (elements.peopleList) {
                 elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
             }
+            if (typeof resetTracking === 'function') resetTracking();
 
             elements.uploadArea.style.display = 'block';
             elements.videoContainer.classList.remove('active');
