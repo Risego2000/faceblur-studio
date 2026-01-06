@@ -1393,7 +1393,7 @@
                     Arrastra tu archivo aquí o usa el botón para explorar.<br>
                     Formatos soportados: MP4, MOV, WebM.
                 </p>
-                <div class="upload-btn" onclick="document.getElementById('fileInput').click()">Abrir Archivo</div>
+                <div class="upload-btn">Abrir Archivo</div>
             </div>
 
             <div id="videoContainer">
@@ -1596,18 +1596,7 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        video.setAttribute('webkit-playsinline', 'true');
-        video.style.position = 'absolute'; // Changed from fixed
-        video.style.top = '0';
-        video.style.left = '0';
-        video.style.width = '100%'; // Match container
-        video.style.height = '100%';
-        video.style.objectFit = 'contain'; // Match canvas
-        video.style.opacity = '0.01'; // Tiny opacity to be "visible"
-        video.style.zIndex = '-1'; // Behind canvas
-
-        // Append to container if possible, otherwise body (will move in init)
-        // Ideally we append later, but for now let's safely append to body and move it on init
+        video.style.display = 'none';
         document.body.appendChild(video);
 
         // Processing canvas
@@ -1626,14 +1615,6 @@
             }
 
             setupEventListeners();
-
-            // Move video to container for proper mobile layer handling
-            if (elements.videoContainer) {
-                elements.videoContainer.appendChild(video);
-                // Also ensure processCanvas is not blocking anything (it's hidden by default but let's be safe)
-                processCanvas.style.display = 'none';
-            }
-
             await loadAI();
         }
 
@@ -1752,11 +1733,9 @@
 
             // Configure Detector
             if (loadedModel === 'ssd') {
-                // Lower threshold to detect profiles/turned heads
-                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
+                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
             } else {
-                // Lower threshold significantly for Tiny to catch side profiles
-                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.15 });
+                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 }); // 512 for better accuracy
             }
             state.detectorType = loadedModel;
 
@@ -1843,54 +1822,54 @@
         }
 
         function loadVideo(file) {
+            // Validate type
             if (file.type.indexOf('video') === -1) {
                 alert('Por favor selecciona un archivo de video válido.');
                 return;
             }
 
+            // Show loader
             if (elements.uploadArea) elements.uploadArea.style.display = 'none';
             if (elements.videoLoader) elements.videoLoader.classList.add('active');
 
+            // Reset App
             if (typeof resetAppState === 'function') resetAppState();
 
+            // Load
             const url = URL.createObjectURL(file);
-            state.videoBlobUrl = url;
+            video.src = url;
+            video.load();
 
-            // PREPARE EVENTS BEFORE SOURCE
-            video.onloadedmetadata = () => {
+            video.onloadeddata = () => {
                 state.videoWidth = video.videoWidth;
                 state.videoHeight = video.videoHeight;
-                console.log(`Metadata loaded: ${state.videoWidth}x${state.videoHeight}`);
 
-                // Update canvas dimensions immediately
                 if (elements.renderCanvas) {
                     elements.renderCanvas.width = state.videoWidth;
                     elements.renderCanvas.height = state.videoHeight;
                 }
                 processCanvas.width = state.videoWidth;
                 processCanvas.height = state.videoHeight;
+
+                console.log(`Video loaded: ${state.videoWidth}x${state.videoHeight}`);
+
                 if (elements.videoContainer) elements.videoContainer.classList.add('active');
-            };
 
-            video.oncanplay = () => {
-                console.log('Video can play - starting render watchdog');
-
-                // Watchdog: Force render multiple times as mobile decoders can be lazy
-                let attempts = 30; // Try for ~4.5 seconds
-                const watchdog = () => {
-                    if (attempts <= 0) {
-                        if (elements.videoLoader) elements.videoLoader.classList.remove('active');
-                        return;
-                    }
-                    if (state.videoWidth > 0) {
-                        if (typeof renderFrame === 'function') renderFrame();
-                    }
-                    attempts--;
-                    setTimeout(watchdog, 150);
+                // Force multiple renders to ensure frame is captured
+                const forceRender = () => {
+                    if (typeof renderFrame === 'function') renderFrame();
                 };
-                watchdog();
+
+                requestAnimationFrame(forceRender);
+                setTimeout(forceRender, 100);
+                setTimeout(forceRender, 500);
+
+                setTimeout(() => {
+                    if (elements.videoLoader) elements.videoLoader.classList.remove('active');
+                }, 600);
 
                 if (typeof updateTimeDisplay === 'function') updateTimeDisplay();
+
                 if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
             };
 
@@ -1899,30 +1878,6 @@
                 if (elements.uploadArea) elements.uploadArea.style.display = 'block';
                 if (elements.videoLoader) elements.videoLoader.classList.remove('active');
             };
-
-            // Set source and attributes
-            video.src = url;
-            video.muted = true;
-            video.playsInline = true;
-            video.load();
-
-            // iOS/Mobile Kickstart: The "Play-Pause" dance
-            const kickstart = async () => {
-                try {
-                    await video.play();
-                    // Some browsers need a tiny bit of playback to actually decode a frame for canvas
-                    setTimeout(() => {
-                        video.pause();
-                        video.currentTime = 0;
-                        if (typeof renderFrame === 'function') renderFrame();
-                    }, 100);
-                } catch (e) {
-                    console.warn("Kickstart play failed:", e);
-                }
-            };
-
-            // Try kickstart on multiple events to be safe
-            video.addEventListener('loadeddata', kickstart, { once: true });
         }
 
         // Event Listeners
@@ -2349,8 +2304,8 @@
 
                 if (refined.length > 0) {
                     state.lastKnownFaces = filterFaces(refined);
-                    // Much longer persistence: ~2-3 seconds to handle full head turns
-                    state.previewPersistenceCount = isMobile ? 60 : 45;
+                    // Much longer persistence on mobile to prevent gaps
+                    state.previewPersistenceCount = isMobile ? 30 : 20;
                 } else if (state.previewPersistenceCount > 0) {
                     state.previewPersistenceCount--;
                     // Keep using cached faces - this prevents frame gaps
@@ -2650,8 +2605,7 @@
 
             let lastKnownFaces = [];
             let persistenceCounter = 0;
-            // Persistence for export: 30 frames = 1 second of "memory" if face is lost
-            const MAX_PERSISTENCE = 30;
+            const MAX_PERSISTENCE = 6; // Mantener detecciones durante 6 frames si se pierden
 
             for (let time = 0; time < duration; time += frameTime) {
                 if (state.processingCanceled) {
@@ -2769,7 +2723,7 @@
 
         function createFinalVideo(frames, fps) {
             elements.modalTitle.textContent = 'Generando Video';
-            elements.modalSubtitle.textContent = 'Sincronizando audio y video...';
+            elements.modalSubtitle.textContent = 'Compilando resultados con fluidez...';
             elements.modalFill.style.width = '100%';
 
             const canvas = document.createElement('canvas');
@@ -2777,26 +2731,8 @@
             canvas.height = state.videoHeight;
             const ctx = canvas.getContext('2d');
 
-            // Capture stream from canvas
-            const stream = canvas.captureStream(fps);
-
-            // Audio Preservation Logic
-            // We get the audio track from the original video element
-            let audioStream = null;
-            try {
-                if (video.captureStream) audioStream = video.captureStream();
-                else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
-            } catch (e) {
-                console.warn('Audio capture not supported or blocked:', e);
-            }
-
-            if (audioStream) {
-                const audioTracks = audioStream.getAudioTracks();
-                if (audioTracks.length > 0) {
-                    console.log('Audio track found and added to export');
-                    stream.addTrack(audioTracks[0]);
-                }
-            }
+            // 0 indica que capturamos frames manualmente vía requestFrame()
+            const stream = canvas.captureStream(0);
 
             let mimeType = 'video/webm;codecs=vp9';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
@@ -2804,7 +2740,7 @@
 
             const recorder = new MediaRecorder(stream, {
                 mimeType: mimeType,
-                videoBitsPerSecond: 8000000
+                videoBitsPerSecond: 8000000 // 8 Mbps para excelente calidad
             });
 
             const chunks = [];
@@ -2818,74 +2754,38 @@
                 elements.processBtn.disabled = false;
                 elements.exportBtn.disabled = false;
                 elements.modal.classList.remove('active');
-
-                // Reset video state
-                video.pause();
-                video.currentTime = 0;
-                video.muted = false; // Ensure unmuted for user
-
-                // Show completion with audio notice
-                alert('✅ Video procesado correctamente con AUDIO!\n\nSe ha sincronizado el sonido original.');
+                alert('✅ Video procesado correctamente!\n\nLa duración y fluidez coinciden con el original.');
             };
 
-            // Playback-driven recording loop to ensure audio sync
+            recorder.start();
+
             const img = new Image();
+            let frameIndex = 0;
+            const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
 
-            // Prepare video for playback-capture
-            video.currentTime = 0;
-            video.volume = 1.0;
-            video.muted = false; // Must be unmuted to capture audio track
-
-            // Loop
-            function syncLoop() {
-                if (recorder.state === 'inactive') return;
-
-                const t = video.currentTime;
-                // Calculate which frame index corresponds to current time
-                let index = Math.floor(t * fps);
-                index = Math.min(index, frames.length - 1);
-
-                if (index >= 0 && index < frames.length) {
-                    img.src = frames[index];
-                    if (img.complete) {
-                        ctx.drawImage(img, 0, 0);
-                    } else {
-                        // If not loaded immediately, draw on load (might skip if too slow, but keeps audio sync)
-                        img.onload = () => ctx.drawImage(img, 0, 0);
-                    }
+            function drawNext() {
+                if (frameIndex >= frames.length) {
+                    // Dar tiempo al encoder para finalizar
+                    setTimeout(() => recorder.stop(), 500);
+                    return;
                 }
 
-                // Check for end
-                if (video.ended || index >= frames.length - 1) {
-                    // Small buffer to ensure end
-                    if (video.ended) {
-                        recorder.stop();
-                    } else {
-                        requestAnimationFrame(syncLoop);
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    // Forzar la grabación de este frame exacto en el stream
+                    const track = stream.getVideoTracks()[0];
+                    if (track && track.requestFrame) {
+                        track.requestFrame();
                     }
-                } else {
-                    requestAnimationFrame(syncLoop);
-                }
+
+                    frameIndex++;
+                    // Usamos el intervalo correspondiente al FPS para mantener la duración original
+                    setTimeout(drawNext, frameDuration);
+                };
+                img.src = frames[frameIndex];
             }
 
-            video.onplay = () => {
-                recorder.start();
-                syncLoop();
-                video.onplay = null; // Remove listener
-            };
-
-            video.onended = () => {
-                if (recorder.state === 'recording') recorder.stop();
-            };
-
-            // Start everything
-            const playPromise = video.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.error("Auto-play prevented:", error);
-                    alert("Por favor, interactúa con la página para permitir la grabación de audio.");
-                });
-            }
+            drawNext();
         }
 
         // PWA Install Logic
@@ -2930,7 +2830,7 @@
         }
 
         // Reset app
-        function resetAppState() {
+        function resetApp() {
             video.pause();
             stopPreviewLoop();
 
@@ -2949,7 +2849,6 @@
             if (elements.peopleList) {
                 elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
             }
-            if (typeof resetTracking === 'function') resetTracking();
 
             elements.uploadArea.style.display = 'block';
             elements.videoContainer.classList.remove('active');
