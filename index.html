@@ -1643,8 +1643,10 @@
                                 style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
                                 <div style="font-size: 10px; color: rgba(255,255,255,0.8);">Modelo de Inteligencia
                                     Artificial de Detección de Rostros:</div>
-                                <button class="overlay-btn active" data-model="auto"
-                                    style="margin: 0; padding: 2px 8px; font-size: 9px; min-width: auto; height: auto; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Auto</button>
+                                <div class="overlay-controls" style="padding: 1px;">
+                                    <button class="overlay-btn active" data-model="auto"
+                                        style="margin: 0; padding: 2px 10px; font-size: 9px; min-width: auto; height: auto;">Auto</button>
+                                </div>
                             </div>
                             <div class="overlay-controls" style="flex-wrap: wrap; justify-content: center;">
                                 <button class="overlay-btn" data-model="ssd">SSD</button>
@@ -1828,7 +1830,7 @@
             modelReady: false,
             recognitionReady: false,
             detectorType: null,
-            modelPreference: isMobile ? 'tiny' : 'ssd', // Use Tiny on mobile for better performance
+            modelPreference: 'auto', // Use Auto by default
             videoWidth: 0,
             videoHeight: 0,
             lastKnownFaces: [],
