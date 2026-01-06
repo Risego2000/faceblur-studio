@@ -1855,7 +1855,8 @@
             knownFaces: [], // { id, descriptor, name, excluded }
             trackingEnabled: true,
             highlightedPersonId: null,
-            previewPersistenceCount: 0
+            previewPersistenceCount: 0,
+            isLoadingModel: false
         };
 
         // Register Service Worker for PWA
@@ -2003,268 +2004,262 @@
                 return;
             }
 
-            const modelUrls = [
-                './models/',
-                'https://justadudewhohacks.github.io/face-api.js/models/'
-            ];
-
-            let loadedModel = null;
-            document.getElementById('mainStatusText').innerText = 'Iniciando Motores IA...';
-
-            // --- STAGE 1: DETECTOR ---
-            const modelPref = state.modelPreference;
-            const useAuto = modelPref === 'auto';
-
-            let detectorType = modelPref;
-            if (useAuto) {
-                detectorType = isMobile ? 'tiny' : 'ssd';
-            }
-
-            updateModelStatus('det', 0, 'Iniciando...');
-
-            // Load based on selected model
             try {
-                if (detectorType === 'blazeface') {
-                    // TensorFlow.js BlazeFace
-                    updateModelStatus('det', 30, 'Cargando BlazeFace...');
-                    if (typeof blazeface !== 'undefined') {
-                        window.blazefaceModel = await blazeface.load();
-                        loadedModel = 'blazeface';
-                        updateModelStatus('det', 100, 'BlazeFace Listo');
-                    } else {
-                        throw new Error('BlazeFace no disponible');
-                    }
-                } else if (detectorType === 'mediapipe') {
-                    // MediaPipe Face Detection
-                    updateModelStatus('det', 30, 'Cargando MediaPipe...');
-                    if (typeof FaceDetection !== 'undefined') {
-                        window.mediapipeDetector = new FaceDetection({
-                            locateFile: (file) => {
-                                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`;
-                            }
-                        });
+                const modelUrls = [
+                    './models/',
+                    'https://justadudewhohacks.github.io/face-api.js/models/'
+                ];
 
-                        window.mediapipeDetector.setOptions({
-                            model: 'short', // 'short' for faces within 2m, 'full' for 5m
-                            minDetectionConfidence: 0.5
-                        });
+                let loadedModel = null;
 
-                        await window.mediapipeDetector.initialize();
-                        loadedModel = 'mediapipe';
-                        updateModelStatus('det', 100, 'MediaPipe Listo');
-                    } else {
-                        throw new Error('MediaPipe no disponible');
-                    }
-                } else if (detectorType === 'yolo') {
-                    // YOLO Face using ONNX Runtime Web
-                    updateModelStatus('det', 30, 'Cargando YOLO...');
-                    if (typeof ort !== 'undefined') {
-                        try {
-                            // Using a lighter YOLOv5 face model instead
-                            // This is more reliable and faster to download
-                            const modelUrl = 'https://cdn.jsdelivr.net/gh/onnx/models@main/vision/body_analysis/ultraface/models/version-RFB-320.onnx';
+                if (state.isLoadingModel) return;
+                state.isLoadingModel = true;
 
-                            updateModelStatus('det', 50, 'Descargando YOLO...');
+                // Desactivar botones durante la carga
+                if (elements.modelBtns) elements.modelBtns.forEach(b => b.disabled = true);
 
-                            // Set timeout for model loading
-                            const loadPromise = ort.InferenceSession.create(modelUrl, {
-                                executionProviders: ['webgl', 'wasm'],
-                                graphOptimizationLevel: 'all'
+                const statusEl = document.getElementById('mainStatusText');
+                if (statusEl) statusEl.innerText = 'Iniciando Motores IA...';
+
+                // --- STAGE 1: DETECTOR ---
+                const modelPref = state.modelPreference;
+                const useAuto = modelPref === 'auto';
+
+                let detectorType = modelPref;
+                if (useAuto) {
+                    detectorType = isMobile ? 'tiny' : 'ssd';
+                }
+
+                updateModelStatus('det', 0, 'Iniciando...');
+
+                // Load based on selected model
+                try {
+                    if (detectorType === 'blazeface') {
+                        // TensorFlow.js BlazeFace
+                        updateModelStatus('det', 30, 'Cargando BlazeFace...');
+                        if (typeof blazeface !== 'undefined') {
+                            window.blazefaceModel = await blazeface.load();
+                            loadedModel = 'blazeface';
+                            updateModelStatus('det', 100, 'BlazeFace Listo');
+                        } else {
+                            throw new Error('BlazeFace no disponible');
+                        }
+                    } else if (detectorType === 'mediapipe') {
+                        // MediaPipe Face Detection
+                        updateModelStatus('det', 30, 'Cargando MediaPipe...');
+                        if (typeof FaceDetection !== 'undefined') {
+                            window.mediapipeDetector = new FaceDetection({
+                                locateFile: (file) => {
+                                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`;
+                                }
                             });
 
-                            const timeoutPromise = new Promise((_, reject) =>
-                                setTimeout(() => reject(new Error('Timeout: Modelo muy pesado')), 15000)
-                            );
+                            window.mediapipeDetector.setOptions({
+                                model: 'short', // 'short' for faces within 2m, 'full' for 5m
+                                minDetectionConfidence: 0.5
+                            });
 
-                            window.yoloSession = await Promise.race([loadPromise, timeoutPromise]);
-
-                            loadedModel = 'yolo';
-                            updateModelStatus('det', 100, 'YOLO Listo');
-                        } catch (e) {
-                            console.error('YOLO load error:', e);
-                            throw new Error('YOLO: ' + (e.message || 'Error de carga'));
-                        }
-                    } else {
-                        throw new Error('YOLO: ONNX Runtime no disponible');
-                    }
-                } else if (detectorType === 'mtcnn') {
-                    // MTCNN from face-api.js
-                    // MTCNN has multiple model files
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            updateModelStatus('det', 30, 'Cargando MTCNN...');
-                            await faceapi.nets.mtcnn.loadFromUri(modelUrl);
-                            loadedModel = 'mtcnn';
-                            updateModelStatus('det', 100, 'MTCNN Listo');
-                            break;
-                        } catch (e) {
-                            console.warn('MTCNN fallback:', e);
-                        }
-                    }
-
-                    if (!loadedModel) {
-                        throw new Error('MTCNN no pudo cargar desde ninguna fuente');
-                    }
-                } else if (detectorType === 'mediapipe') {
-                    // MediaPipe Face Detection via TensorFlow
-                    updateModelStatus('det', 30, 'Cargando MediaPipe...');
-                    if (typeof faceDetection !== 'undefined') {
-                        try {
-                            window.mediapipeDetector = await faceDetection.createDetector(
-                                faceDetection.SupportedModels.MediaPipeFaceDetector,
-                                {
-                                    runtime: 'tfjs',
-                                    maxFaces: 10
-                                }
-                            );
+                            await window.mediapipeDetector.initialize();
                             loadedModel = 'mediapipe';
                             updateModelStatus('det', 100, 'MediaPipe Listo');
-                        } catch (e) {
-                            console.error('MediaPipe error:', e);
-                            throw new Error('MediaPipe: ' + e.message);
+                        } else {
+                            throw new Error('MediaPipe no disponible');
+                        }
+                    } else if (detectorType === 'yolo') {
+                        // YOLO Face using ONNX Runtime Web
+                        updateModelStatus('det', 30, 'Cargando YOLO...');
+                        if (typeof ort !== 'undefined') {
+                            try {
+                                // Using a lighter YOLOv5 face model instead
+                                // This is more reliable and faster to download
+                                const modelUrl = 'https://cdn.jsdelivr.net/gh/onnx/models@main/vision/body_analysis/ultraface/models/version-RFB-320.onnx';
+
+                                updateModelStatus('det', 50, 'Descargando YOLO...');
+
+                                // Set timeout for model loading
+                                const loadPromise = ort.InferenceSession.create(modelUrl, {
+                                    executionProviders: ['webgl', 'wasm'],
+                                    graphOptimizationLevel: 'all'
+                                });
+
+                                const timeoutPromise = new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('Timeout: Modelo muy pesado')), 15000)
+                                );
+
+                                window.yoloSession = await Promise.race([loadPromise, timeoutPromise]);
+
+                                loadedModel = 'yolo';
+                                updateModelStatus('det', 100, 'YOLO Listo');
+                            } catch (e) {
+                                console.error('YOLO load error:', e);
+                                throw new Error('YOLO: ' + (e.message || 'Error de carga'));
+                            }
+                        } else {
+                            throw new Error('YOLO: ONNX Runtime no disponible');
+                        }
+                    } else if (detectorType === 'mtcnn') {
+                        // MTCNN from face-api.js
+                        // MTCNN has multiple model files
+                        for (const modelUrl of modelUrls) {
+                            try {
+                                updateModelStatus('det', 30, 'Cargando MTCNN...');
+                                await faceapi.nets.mtcnn.loadFromUri(modelUrl);
+                                loadedModel = 'mtcnn';
+                                updateModelStatus('det', 100, 'MTCNN Listo');
+                                break;
+                            } catch (e) {
+                                console.warn('MTCNN fallback:', e);
+                            }
+                        }
+
+                        if (!loadedModel) {
+                            throw new Error('MTCNN no pudo cargar desde ninguna fuente');
+                        }
+                    } else if (detectorType === 'retinaface') {
+                        // RetinaFace (using BlazeFace with enhanced settings)
+                        updateModelStatus('det', 30, 'Cargando RetinaFace...');
+                        if (typeof blazeface !== 'undefined') {
+                            window.retinafaceModel = await blazeface.load({
+                                maxFaces: 20,
+                                iouThreshold: 0.2,
+                                scoreThreshold: 0.5
+                            });
+                            loadedModel = 'retinaface';
+                            updateModelStatus('det', 100, 'RetinaFace Listo');
+                        } else {
+                            throw new Error('RetinaFace no disponible');
+                        }
+                    } else if (detectorType === 'faceboxes') {
+                        // FaceBoxes (using BlazeFace with optimized settings for CPU)
+                        updateModelStatus('det', 30, 'Cargando FaceBoxes...');
+                        if (typeof blazeface !== 'undefined') {
+                            window.faceboxesModel = await blazeface.load({
+                                maxFaces: 10,
+                                iouThreshold: 0.3,
+                                scoreThreshold: 0.75
+                            });
+                            loadedModel = 'faceboxes';
+                            updateModelStatus('det', 100, 'FaceBoxes Listo');
+                        } else {
+                            throw new Error('FaceBoxes no disponible');
+                        }
+                    } else if (detectorType === 'tiny') {
+                        // Tiny Face Detector
+                        const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
+                        for (const modelUrl of modelUrls) {
+                            try {
+                                await prefetchFiles(modelUrl, tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
+                                await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
+                                loadedModel = 'tiny';
+                                updateModelStatus('det', 100, 'Tiny Listo');
+                                break;
+                            } catch (e) {
+                                console.warn('Tiny fallback', e);
+                            }
                         }
                     } else {
-                        throw new Error('MediaPipe no disponible');
-                    }
-                } else if (detectorType === 'retinaface') {
-                    // RetinaFace (using BlazeFace with enhanced settings)
-                    updateModelStatus('det', 30, 'Cargando RetinaFace...');
-                    if (typeof blazeface !== 'undefined') {
-                        window.retinafaceModel = await blazeface.load({
-                            maxFaces: 20,
-                            iouThreshold: 0.2,
-                            scoreThreshold: 0.5
-                        });
-                        loadedModel = 'retinaface';
-                        updateModelStatus('det', 100, 'RetinaFace Listo');
-                    } else {
-                        throw new Error('RetinaFace no disponible');
-                    }
-                } else if (detectorType === 'faceboxes') {
-                    // FaceBoxes (using BlazeFace with optimized settings for CPU)
-                    updateModelStatus('det', 30, 'Cargando FaceBoxes...');
-                    if (typeof blazeface !== 'undefined') {
-                        window.faceboxesModel = await blazeface.load({
-                            maxFaces: 10,
-                            iouThreshold: 0.3,
-                            scoreThreshold: 0.75
-                        });
-                        loadedModel = 'faceboxes';
-                        updateModelStatus('det', 100, 'FaceBoxes Listo');
-                    } else {
-                        throw new Error('FaceBoxes no disponible');
-                    }
-                } else if (detectorType === 'tiny') {
-                    // Tiny Face Detector
-                    const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            await prefetchFiles(modelUrl, tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
-                            await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
-                            loadedModel = 'tiny';
-                            updateModelStatus('det', 100, 'Tiny Listo');
-                            break;
-                        } catch (e) {
-                            console.warn('Tiny fallback', e);
+                        // SSD MobileNet (default)
+                        const ssdFiles = ['ssd_mobilenetv1_model-weights_manifest.json', 'ssd_mobilenetv1_model-shard1', 'ssd_mobilenetv1_model-shard2'];
+                        for (const modelUrl of modelUrls) {
+                            try {
+                                await prefetchFiles(modelUrl, ssdFiles, (pct, text) => updateModelStatus('det', pct, text));
+                                await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
+                                loadedModel = 'ssd';
+                                updateModelStatus('det', 100, 'SSD Listo');
+                                break;
+                            } catch (e) {
+                                console.warn('SSD fallback', e);
+                            }
                         }
                     }
-                } else {
-                    // SSD MobileNet (default)
-                    const ssdFiles = ['ssd_mobilenetv1_model-weights_manifest.json', 'ssd_mobilenetv1_model-shard1', 'ssd_mobilenetv1_model-shard2'];
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            await prefetchFiles(modelUrl, ssdFiles, (pct, text) => updateModelStatus('det', pct, text));
-                            await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
-                            loadedModel = 'ssd';
-                            updateModelStatus('det', 100, 'SSD Listo');
-                            break;
-                        } catch (e) {
-                            console.warn('SSD fallback', e);
-                        }
+                } catch (e) {
+                    console.error('Detector load error:', e);
+                    updateModelStatus('det', 0, 'Error: ' + e.message);
+                    // Fallback to Tiny
+                    try {
+                        const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
+                        await prefetchFiles(modelUrls[1], tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrls[1]);
+                        loadedModel = 'tiny';
+                        updateModelStatus('det', 100, 'Tiny Listo (Fallback)');
+                    } catch (fallbackError) {
+                        updateModelStatus('det', 0, 'Fallo Crítico');
+                        throw new Error('No detector loaded');
                     }
                 }
-            } catch (e) {
-                console.error('Detector load error:', e);
-                updateModelStatus('det', 0, 'Error: ' + e.message);
-                // Fallback to Tiny
-                try {
-                    const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
-                    await prefetchFiles(modelUrls[1], tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
-                    await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrls[1]);
-                    loadedModel = 'tiny';
-                    updateModelStatus('det', 100, 'Tiny Listo (Fallback)');
-                } catch (fallbackError) {
+
+                if (!loadedModel) {
                     updateModelStatus('det', 0, 'Fallo Crítico');
                     throw new Error('No detector loaded');
                 }
-            }
 
-            if (!loadedModel) {
-                updateModelStatus('det', 0, 'Fallo Crítico');
-                throw new Error('No detector loaded');
-            }
-
-            // Configure Detector
-            if (loadedModel === 'ssd') {
-                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
-            } else if (loadedModel === 'tiny') {
-                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
-            } else if (loadedModel === 'blazeface' || loadedModel === 'retinaface' || loadedModel === 'faceboxes') {
-                // These models use their own detectors
-                window.faceDetector = null;
-            }
-            state.detectorType = loadedModel;
-
-            // --- STAGE 2: RECOGNITION ---
-            const recogFiles = [
-                'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
-                'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
-            ];
-
-            updateModelStatus('rec', 0, 'Pendiente...');
-            state.recognitionReady = false;
-
-            for (const modelUrl of modelUrls) {
-                try {
-                    await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
-
-                    await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                    await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-
-                    state.recognitionReady = true;
-                    updateModelStatus('rec', 100, 'Reconocimiento Listo');
-                    break;
-                } catch (e) {
-                    console.warn('Recog fallback', e);
+                // Configure Detector
+                if (loadedModel === 'ssd') {
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
+                } else if (loadedModel === 'tiny') {
+                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
+                } else if (loadedModel === 'blazeface' || loadedModel === 'retinaface' || loadedModel === 'faceboxes') {
+                    // These models use their own detectors
+                    window.faceDetector = null;
                 }
-            }
+                state.detectorType = loadedModel;
 
-            if (!state.recognitionReady) {
-                updateModelStatus('rec', 0, 'No Disponible');
-            }
+                // --- STAGE 2: RECOGNITION ---
+                const recogFiles = [
+                    'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
+                    'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
+                ];
 
-            // Finalize
-            state.modelReady = true;
-            const modelNames = {
-                'ssd': 'SSD Precision',
-                'tiny': 'Tiny Fast',
-                'blazeface': 'BlazeFace',
-                'faceboxes': 'FaceBoxes',
-                'retinaface': 'RetinaFace'
-            };
-            const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
-            const statusStr = `IA Lista (${modelName})`;
-            document.getElementById('mainStatusText').innerText = statusStr;
-            updateAIStatus(true);
-            // Hide overlay after delay
-            setTimeout(() => {
-                const aiStatus = document.getElementById('aiStatus');
-                // Optional
-            }, 3000);
+                updateModelStatus('rec', 0, 'Pendiente...');
+                state.recognitionReady = false;
+
+                for (const modelUrl of modelUrls) {
+                    try {
+                        await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
+
+                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+
+                        state.recognitionReady = true;
+                        updateModelStatus('rec', 100, 'Reconocimiento Listo');
+                        break;
+                    } catch (e) {
+                        console.warn('Recog fallback', e);
+                    }
+                }
+
+                if (!state.recognitionReady) {
+                    updateModelStatus('rec', 0, 'No Disponible');
+                }
+
+                // Finalize
+                state.modelReady = true;
+                const modelNames = {
+                    'ssd': 'SSD Precision',
+                    'tiny': 'Tiny Fast',
+                    'blazeface': 'BlazeFace',
+                    'faceboxes': 'FaceBoxes',
+                    'retinaface': 'RetinaFace'
+                };
+                const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
+                const statusStr = `IA Lista (${modelName})`;
+                if (statusEl) statusEl.innerText = statusStr;
+                updateAIStatus(true);
+
+            } catch (err) {
+                console.error('loadAI failed:', err);
+                updateAIStatus(false);
+                const statusEl = document.getElementById('mainStatusText');
+                if (statusEl) statusEl.innerText = 'Error al cargar IA';
+            } finally {
+                state.isLoadingModel = false;
+                if (elements.modelBtns) elements.modelBtns.forEach(b => b.disabled = false);
+            }
         }
 
         function updateAIStatus(ready) {
             const dot = elements.aiStatus.querySelector('.status-dot');
+            const span = document.getElementById('mainStatusText');
             const progress = document.getElementById('aiProgress');
 
             if (ready) {
@@ -2277,8 +2272,7 @@
                     'retinaface': 'RetinaFace'
                 };
                 const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
-                const statusSpan = document.getElementById('mainStatusText');
-                if (statusSpan) statusSpan.textContent = `IA Lista (${modelName})`;
+                span.textContent = `IA Lista (${modelName})`;
                 // Hide progress bar when ready
                 if (progress) progress.classList.remove('active');
                 if (state.videoWidth > 0) {
@@ -2454,7 +2448,13 @@
                     // Forzar recarga de IA con la nueva preferencia
                     state.modelReady = false;
                     updateAIStatus(false);
-                    await loadAI();
+                    try {
+                        await loadAI();
+                    } catch (e) {
+                        console.error('Error al cambiar de modelo:', e);
+                        state.isLoadingModel = false;
+                        elements.modelBtns.forEach(b => b.disabled = false);
+                    }
                 });
             });
 
