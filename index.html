@@ -1975,6 +1975,8 @@
             // Load
             const url = URL.createObjectURL(file);
             video.src = url;
+            video.muted = false; // Enable audio for preview
+            video.volume = 1.0;
             video.load();
 
             video.onloadeddata = () => {
