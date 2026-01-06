@@ -20,6 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
 
+    <!-- Additional TensorFlow models -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.1"></script>
+
     <!-- MediaPipe Face Detection -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229"></script>
 
@@ -1643,6 +1646,8 @@
                             <button class="overlay-btn" data-model="ssd">SSD</button>
                             <button class="overlay-btn" data-model="tiny">Tiny</button>
                             <button class="overlay-btn" data-model="blazeface">BlazeFace</button>
+                            <button class="overlay-btn" data-model="mediapipe">MediaPipe</button>
+                            <button class="overlay-btn" data-model="retinaface">RetinaFace</button>
                         </div>
 
                         <!-- Model Description -->
@@ -2075,6 +2080,50 @@
                     if (!loadedModel) {
                         throw new Error('MTCNN no pudo cargar desde ninguna fuente');
                     }
+                } else if (detectorType === 'mediapipe') {
+                    // MediaPipe Face Detection via TensorFlow
+                    updateModelStatus('det', 30, 'Cargando MediaPipe...');
+                    if (typeof faceDetection !== 'undefined') {
+                        try {
+                            window.mediapipeDetector = await faceDetection.createDetector(
+                                faceDetection.SupportedModels.MediaPipeFaceDetector,
+                                {
+                                    runtime: 'tfjs',
+                                    maxFaces: 10
+                                }
+                            );
+                            loadedModel = 'mediapipe';
+                            updateModelStatus('det', 100, 'MediaPipe Listo');
+                        } catch (e) {
+                            console.error('MediaPipe error:', e);
+                            throw new Error('MediaPipe: ' + e.message);
+                        }
+                    } else {
+                        throw new Error('MediaPipe no disponible');
+                    }
+                } else if (detectorType === 'retinaface') {
+                    // RetinaFace (using MediaPipe backend with different model)
+                    updateModelStatus('det', 30, 'Cargando RetinaFace...');
+                    if (typeof faceDetection !== 'undefined') {
+                        try {
+                            // Using MediaPipeFaceDetector with full range model for better precision
+                            window.retinafaceDetector = await faceDetection.createDetector(
+                                faceDetection.SupportedModels.MediaPipeFaceDetector,
+                                {
+                                    runtime: 'tfjs',
+                                    modelType: 'full',
+                                    maxFaces: 10
+                                }
+                            );
+                            loadedModel = 'retinaface';
+                            updateModelStatus('det', 100, 'RetinaFace Listo');
+                        } catch (e) {
+                            console.error('RetinaFace error:', e);
+                            throw new Error('RetinaFace: ' + e.message);
+                        }
+                    } else {
+                        throw new Error('RetinaFace no disponible');
+                    }
                 } else if (detectorType === 'tiny') {
                     // Tiny Face Detector
                     const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
@@ -2130,7 +2179,7 @@
                 window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
             } else if (loadedModel === 'tiny') {
                 window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 });
-            } else if (loadedModel === 'blazeface' || loadedModel === 'mediapipe' || loadedModel === 'yolo') {
+            } else if (loadedModel === 'blazeface' || loadedModel === 'mediapipe' || loadedModel === 'retinaface') {
                 // These models use their own detectors
                 window.faceDetector = null;
             }
@@ -2342,7 +2391,9 @@
                 'auto': 'Selección automática según dispositivo',
                 'ssd': 'Equilibrado: Buena precisión y velocidad (2MB)',
                 'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
-                'blazeface': 'Ultra rápido: 200+ FPS, muy ligero (100KB)'
+                'blazeface': 'Ultra rápido: 200+ FPS, muy ligero (100KB)',
+                'mediapipe': 'Google MediaPipe: Precisión y velocidad (1.5MB)',
+                'retinaface': 'Máxima precisión: Ángulos difíciles (3MB)'
             };
 
             elements.modelBtns.forEach(btn => {
@@ -2808,6 +2859,36 @@
                                 height: det.boundingBox.height * video.videoHeight
                             },
                             score: det.score[0]
+                        },
+                        identity: null
+                    }));
+                } else if (state.detectorType === 'mediapipe' && window.mediapipeDetector) {
+                    // MediaPipe Face Detection
+                    const predictions = await window.mediapipeDetector.estimateFaces(video);
+                    detections = predictions.map(pred => ({
+                        detection: {
+                            box: {
+                                x: pred.box.xMin,
+                                y: pred.box.yMin,
+                                width: pred.box.width,
+                                height: pred.box.height
+                            },
+                            score: pred.score || 0.9
+                        },
+                        identity: null
+                    }));
+                } else if (state.detectorType === 'retinaface' && window.retinafaceDetector) {
+                    // RetinaFace Detection
+                    const predictions = await window.retinafaceDetector.estimateFaces(video);
+                    detections = predictions.map(pred => ({
+                        detection: {
+                            box: {
+                                x: pred.box.xMin,
+                                y: pred.box.yMin,
+                                width: pred.box.width,
+                                height: pred.box.height
+                            },
+                            score: pred.score || 0.9
                         },
                         identity: null
                     }));
