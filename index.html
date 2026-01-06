@@ -1451,13 +1451,6 @@
                                 <span id="paddingVal">10%</span>
                             </div>
 
-                            <!-- Preview Toggles (New) -->
-                            <div class="overlay-controls" id="previewToggle"
-                                style="justify-content: center; margin-top: 4px;">
-                                <button class="overlay-btn active" id="previewOriginal">Original</button>
-                                <button class="overlay-btn" id="previewEffects">Con Efectos</button>
-                            </div>
-
                             <!-- Action Buttons (New) -->
                             <div class="overlay-actions" style="display: flex; gap: 8px; margin-top: 4px;">
                                 <button class="action-btn" id="processBtn" disabled
@@ -1517,12 +1510,10 @@
             intensity: 15,
             padding: 0.1, // 10% por defecto
             detectionMode: 'all',
-            previewMode: 'original',
+            previewMode: 'effects', // ALWAYS effects
             processedBlob: null,
             videoBlobUrl: null,
             isPlaying: false,
-            isProcessing: false,
-            processingCanceled: false,
             isProcessing: false,
             processingCanceled: false,
             modelReady: false,
@@ -1954,29 +1945,9 @@
                 renderFrame();
             });
 
-            // Preview toggle
-            const previewOriginal = document.getElementById('previewOriginal');
-            const previewEffects = document.getElementById('previewEffects');
-
-            if (previewOriginal && previewEffects) {
-                previewOriginal.addEventListener('click', () => {
-                    state.previewMode = 'original';
-                    previewOriginal.classList.add('active');
-                    previewEffects.classList.remove('active');
-                    renderFrame();
-                });
-
-                previewEffects.addEventListener('click', () => {
-                    if (!state.modelReady) {
-                        alert('La IA no está lista aún');
-                        return;
-                    }
-                    state.previewMode = 'effects';
-                    previewOriginal.classList.remove('active');
-                    previewEffects.classList.add('active');
-                    renderFrame();
-                });
-            }
+            // Preview toggle removed - always effects
+            // const previewOriginal = document.getElementById('previewOriginal');
+            // const previewEffects = document.getElementById('previewEffects');
 
             // Process video
             elements.processBtn.addEventListener('click', processVideo);
@@ -2134,7 +2105,9 @@
             state.smoothedBoxes = {};
             state.highlightedPersonId = null;
             state.previewPersistenceCount = 0;
-            state.previewMode = 'original';
+            state.highlightedPersonId = null;
+            state.previewPersistenceCount = 0;
+            state.previewMode = 'effects'; // Always reset to effects
 
             // Reset UI
             elements.playBtn.textContent = '▶';
@@ -2146,13 +2119,15 @@
                 elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
             }
 
-            // Reset preview buttons
+            // Reset preview buttons (Removed)
+            /*
             const previewOriginal = document.getElementById('previewOriginal');
             const previewEffects = document.getElementById('previewEffects');
             if (previewOriginal && previewEffects) {
                 previewOriginal.classList.add('active');
                 previewEffects.classList.remove('active');
             }
+            */
 
             console.log('App state reset for new video');
         }
@@ -2241,11 +2216,11 @@
 
                 // 3. ALWAYS draw effects if we have cached faces and we're in effects mode
                 // This ensures NO frames are skipped, even while detection is running
-                if (state.previewMode === 'effects' && !state.isProcessing) {
+                // 3. ALWAYS draw effects if we have cached faces and we're in effects mode
+                // This ensures NO frames are skipped, even while detection is running
+                if (!state.isProcessing) {
                     // Always draw effects using last known detections
                     drawCachedEffects(); // Draw everything (effects + highlights)
-                } else if (state.previewMode === 'original' && !state.isProcessing) {
-                    drawTrackingBorders(); // Draw only diagnostic borders
                 }
             } catch (e) {
                 console.error('Render error:', e);
