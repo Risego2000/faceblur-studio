@@ -1744,6 +1744,69 @@
             }
         }
 
+        // File Handling
+        function handleFileSelect(e) {
+            const file = e.target.files ? e.target.files[0] : null;
+            if (file) loadVideo(file);
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            if (elements.uploadArea) elements.uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) loadVideo(file);
+        }
+
+        function loadVideo(file) {
+            // Validate type
+            if (file.type.indexOf('video') === -1) {
+                alert('Por favor selecciona un archivo de video válido.');
+                return;
+            }
+
+            // Show loader
+            if (elements.uploadArea) elements.uploadArea.style.display = 'none';
+            if (elements.videoLoader) elements.videoLoader.classList.add('active');
+
+            // Reset App
+            if (typeof resetAppState === 'function') resetAppState();
+
+            // Load
+            const url = URL.createObjectURL(file);
+            video.src = url;
+            video.load();
+
+            video.onloadeddata = () => {
+                state.videoWidth = video.videoWidth;
+                state.videoHeight = video.videoHeight;
+
+                if (elements.renderCanvas) {
+                    elements.renderCanvas.width = state.videoWidth;
+                    elements.renderCanvas.height = state.videoHeight;
+                }
+                processCanvas.width = state.videoWidth;
+                processCanvas.height = state.videoHeight;
+
+                console.log(`Video loaded: ${state.videoWidth}x${state.videoHeight}`);
+
+                if (elements.videoContainer) elements.videoContainer.classList.add('active');
+                setTimeout(() => {
+                    if (elements.videoLoader) elements.videoLoader.classList.remove('active');
+                }, 500);
+
+                if (typeof updateTimeDisplay === 'function') updateTimeDisplay();
+                if (typeof renderFrame === 'function') renderFrame();
+
+                if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
+            };
+
+            video.onerror = () => {
+                alert('Error al cargar el video.');
+                if (elements.uploadArea) elements.uploadArea.style.display = 'block';
+                if (elements.videoLoader) elements.videoLoader.classList.remove('active');
+            };
+        }
+
         // Event Listeners
         function setupEventListeners() {
             console.log('Setting up event listeners...');
