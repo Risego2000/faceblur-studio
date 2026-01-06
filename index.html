@@ -1666,12 +1666,21 @@
             // RESET APP STATE when loading new video
             resetAppState();
 
+            // Show loading state
+            elements.uploadArea.style.display = 'none';
+            elements.videoContainer.classList.add('active');
+            const loader = document.getElementById('videoLoader');
+            if (loader) loader.classList.add('active');
+
             if (state.videoBlobUrl) {
                 URL.revokeObjectURL(state.videoBlobUrl);
             }
 
-            state.videoBlobUrl = URL.createObjectURL(file);
-            video.src = state.videoBlobUrl;
+            // Small delay to allow UI to update and show loader if file is large
+            setTimeout(() => {
+                state.videoBlobUrl = URL.createObjectURL(file);
+                video.src = state.videoBlobUrl;
+            }, 50);
 
             video.onloadedmetadata = () => {
                 state.videoWidth = video.videoWidth;
@@ -1685,7 +1694,14 @@
 
                 console.log('Video cargado:', state.videoWidth, 'x', state.videoHeight);
 
-                // Show video container
+                // Hide loader with delay
+                if (loader) {
+                    setTimeout(() => {
+                        loader.classList.remove('active');
+                    }, 500);
+                }
+
+                // Show video container (redundant but safe)
                 elements.uploadArea.style.display = 'none';
                 elements.videoContainer.classList.add('active');
 
