@@ -1648,6 +1648,19 @@
                 <div class="modal-progress-fill" id="modalFill"></div>
             </div>
             <div class="modal-percent" id="modalPercent">0%</div>
+
+            <!-- Success Keys -->
+            <div class="modal-actions" id="modalActions"
+                style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
+                <button class="upload-btn" id="btnDownload" style="width: 100%; border: none; cursor: pointer;">
+                    💾 Guardar en Dispositivo
+                </button>
+                <button class="upload-btn" id="btnShare"
+                    style="width: 100%; background: var(--bg-hover); border: 1px solid var(--border); cursor: pointer;">
+                    📤 Compartir / Nube
+                </button>
+            </div>
+
             <button class="modal-cancel" id="cancelBtn">Cancelar</button>
         </div>
     </div>
@@ -2920,10 +2933,51 @@
             recorder.onstop = () => {
                 state.processedBlob = new Blob(chunks, { type: 'video/webm' });
                 state.isProcessing = false;
+
+                // Update Modal UI
+                elements.modalTitle.textContent = '¡Video Listo!';
+                elements.modalSubtitle.textContent = 'Selecciona una opción:';
+
+                // Hide Progress
+                elements.modalFill.parentElement.style.display = 'none';
+                elements.modalPercent.style.display = 'none';
+                document.querySelector('.modal-spinner').style.display = 'none';
+                document.getElementById('cancelBtn').textContent = 'Cerrar';
+
+                // Show Actions
+                const actions = document.getElementById('modalActions');
+                actions.style.display = 'flex';
+
+                // Bind Actions
+                document.getElementById('btnDownload').onclick = () => {
+                    const url = URL.createObjectURL(state.processedBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `faceanon_pro_${Date.now()}.webm`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                };
+
+                document.getElementById('btnShare').onclick = async () => {
+                    if (navigator.share) {
+                        const file = new File([state.processedBlob], `faceanon_pro_${Date.now()}.webm`, { type: 'video/webm' });
+                        try {
+                            await navigator.share({
+                                title: 'Video Anonimizado - FaceAnon PRO',
+                                text: 'Video procesado con seguridad.',
+                                files: [file]
+                            });
+                        } catch (err) {
+                            console.log('Share failed:', err);
+                        }
+                    } else {
+                        alert('Tu dispositivo no soporta compartir nativamente. Usa "Guardar".');
+                    }
+                };
+
                 elements.processBtn.disabled = false;
                 elements.exportBtn.disabled = false;
-                elements.modal.classList.remove('active');
-                alert('✅ Video procesado correctamente!\n\nLa duración y fluidez coinciden con el original.');
+                // elements.modal.classList.remove('active'); // Keep active to show buttons
             };
 
             recorder.start();
