@@ -2008,6 +2008,7 @@
 
             // Universal Seek Update: Update effect/detection whenever time changes (manual seek)
             video.addEventListener('seeked', () => {
+                resetTracking(); // Reset tracking history on seek
                 if (video.paused && state.modelReady && !state.isProcessing) {
                     applyEffects();
                 }
@@ -2106,6 +2107,15 @@
             };
         }
 
+        // Helper to reset tracking (for cleaner seek/play)
+        function resetTracking() {
+            state.lastKnownFaces = [];
+            state.smoothedBoxes = {};
+            state.previewPersistenceCount = 0;
+            // Note: We don't clear state.knownFaces (the list of people) 
+            // because we want to remember who is who for the session.
+        }
+
         // Reset app state when loading new video
         function resetAppState() {
             // Stop playback
@@ -2150,6 +2160,7 @@
         // Playback controls
         function togglePlay() {
             if (video.paused) {
+                resetTracking(); // Reset tracking on play start
                 video.play();
                 state.isPlaying = true;
                 elements.playBtn.textContent = '⏸';
