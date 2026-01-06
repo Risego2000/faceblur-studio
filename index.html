@@ -1732,52 +1732,53 @@
             }
 
             // Configure Detector
-            // Lower threshold to detect profiles/turned heads
-            window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
-        } else {
-            // Lower threshold significantly for Tiny to catch side profiles
-            window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.15 });
-        }
-        state.detectorType = loadedModel;
-
-        // --- STAGE 2: RECOGNITION ---
-        const recogFiles = [
-            'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
-            'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
-        ];
-
-        updateModelStatus('rec', 0, 'Pendiente...');
-        state.recognitionReady = false;
-
-        for (const modelUrl of modelUrls) {
-            try {
-                await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
-
-                await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-
-                state.recognitionReady = true;
-                updateModelStatus('rec', 100, 'Reconocimiento Listo');
-                break;
-            } catch (e) {
-                console.warn('Recog fallback', e);
+            if (loadedModel === 'ssd') {
+                // Lower threshold to detect profiles/turned heads
+                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
+            } else {
+                // Lower threshold significantly for Tiny to catch side profiles
+                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.15 });
             }
-        }
+            state.detectorType = loadedModel;
 
-        if (!state.recognitionReady) {
-            updateModelStatus('rec', 0, 'No Disponible');
-        }
+            // --- STAGE 2: RECOGNITION ---
+            const recogFiles = [
+                'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
+                'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
+            ];
 
-        // Finalize
-        state.modelReady = true;
-        document.getElementById('mainStatusText').innerText = 'IA Lista';
-        updateAIStatus(true);
+            updateModelStatus('rec', 0, 'Pendiente...');
+            state.recognitionReady = false;
 
-        // Hide overlay after delay
-        setTimeout(() => {
-            const aiStatus = document.getElementById('aiStatus');
-            // Optional
-        }, 3000);
+            for (const modelUrl of modelUrls) {
+                try {
+                    await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
+
+                    await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                    await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+
+                    state.recognitionReady = true;
+                    updateModelStatus('rec', 100, 'Reconocimiento Listo');
+                    break;
+                } catch (e) {
+                    console.warn('Recog fallback', e);
+                }
+            }
+
+            if (!state.recognitionReady) {
+                updateModelStatus('rec', 0, 'No Disponible');
+            }
+
+            // Finalize
+            state.modelReady = true;
+            document.getElementById('mainStatusText').innerText = 'IA Lista';
+            updateAIStatus(true);
+
+            // Hide overlay after delay
+            setTimeout(() => {
+                const aiStatus = document.getElementById('aiStatus');
+                // Optional
+            }, 3000);
         }
 
         function updateAIStatus(ready) {
