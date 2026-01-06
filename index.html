@@ -1596,7 +1596,12 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        video.style.display = 'none';
+        video.style.position = 'absolute';
+        video.style.opacity = '0';
+        video.style.pointerEvents = 'none';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.left = '-9999px'; // Move off-screen but keep in DOM layout
         document.body.appendChild(video);
 
         // Processing canvas
@@ -1875,7 +1880,16 @@
             };
 
             video.src = url;
+            video.muted = true; // Essential for auto-loading on some mobiles
+            video.playsInline = true;
             video.load();
+
+            // Mobile Hack: Seek slightly to force frame buffer
+            // Then pause immediately to show the first frame
+            const mobileUnlock = () => {
+                video.currentTime = 0.01;
+            };
+            video.addEventListener('loadedmetadata', mobileUnlock, { once: true });
 
             video.onerror = () => {
                 alert('Error al cargar el video.');
