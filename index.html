@@ -1280,7 +1280,10 @@
             isPlaying: false,
             isProcessing: false,
             processingCanceled: false,
+            isProcessing: false,
+            processingCanceled: false,
             modelReady: false,
+            recognitionReady: false,
             detectorType: null,
             modelPreference: isMobile ? 'tiny' : 'ssd', // Use Tiny on mobile for better performance
             videoWidth: 0,
@@ -1490,7 +1493,23 @@
                 }
 
                 state.modelReady = true;
-                updateLoadingProgress(100);
+
+                // Load additional models for recognition/tracking
+                elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
+                updateLoadingProgress(50);
+
+                state.recognitionReady = false;
+                for (const modelUrl of modelUrls) {
+                    try {
+                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+                        console.log('✅ Modelos de reconocimiento cargados');
+                        state.recognitionReady = true;
+                        break;
+                    } catch (e) {
+                        console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
+                    }
+                }
                 updateAIStatus(true);
                 console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
 
@@ -1880,9 +1899,10 @@
             try {
                 console.log('Running face detection...');
 
-                // On mobile, use simpler detection without landmarks/descriptors
+                // Use full detection if recognition is ready, otherwise basic
                 let detections;
-                if (isMobile) {
+                if (!state.recognitionReady) {
+                    // Basic detection (faster, no recognition)
                     detections = await faceapi.detectAllFaces(video, window.faceDetector);
                     // Convert to format expected by rest of code
                     detections = detections.map(d => ({
@@ -1890,6 +1910,7 @@
                         identity: null
                     }));
                 } else {
+                    // Full detection with recognition
                     detections = await faceapi.detectAllFaces(video, window.faceDetector)
                         .withFaceLandmarks()
                         .withFaceDescriptors();
@@ -2208,8 +2229,8 @@
                 try {
                     let detections;
 
-                    // On mobile, use simpler detection without landmarks/descriptors
-                    if (isMobile) {
+                    // Use full detection if recognition is ready, otherwise basic
+                    if (!state.recognitionReady) {
                         detections = await faceapi.detectAllFaces(video, window.faceDetector);
                         // Convert to format expected by rest of code
                         detections = detections.map(d => ({
