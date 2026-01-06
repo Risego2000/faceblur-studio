@@ -2174,7 +2174,7 @@
 
         function startPreviewLoop() {
             let lastTime = 0;
-            const updateInterval = isMobile ? 1000 : 0; // 1 second update on mobile
+            const updateInterval = 0; // Force frame-by-frame update everywhere as requested
 
             function loop(timestamp) {
                 if (!state.isPlaying) return;
@@ -2236,12 +2236,13 @@
                 return;
             }
 
-            // Throttle detection on mobile for better performance
-            const now = Date.now();
-            if (isMobile && now - lastDetectionTime < DETECTION_INTERVAL) {
-                return;
-            }
-            lastDetectionTime = now;
+            // User requested frame-by-frame detection without skipping
+            // Removing throttle to process every possible frame
+            // const now = Date.now();
+            // if (isMobile && now - lastDetectionTime < DETECTION_INTERVAL) {
+            //    return;
+            // }
+            // lastDetectionTime = now;
 
             isDetecting = true;
             try {
