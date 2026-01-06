@@ -2078,12 +2078,12 @@
             };
         }
 
-        // Helper to reset tracking (for cleaner seek/play)
         function resetTracking() {
             state.lastKnownFaces = [];
             state.smoothedBoxes = {};
             state.previewPersistenceCount = 0;
             lastDetectionTime = 0; // Ensure next detection runs immediately
+            isDetecting = false; // Force unlock detection in case it got stuck
         }
 
         // Reset app state when loading new video
