@@ -1652,7 +1652,17 @@
                                 <span id="paddingVal">10%</span>
                             </div>
 
-
+                            <!-- Trim Controls -->
+                            <div class="overlay-slider-row"
+                                style="margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+                                <span>Recorte</span>
+                                <div style="display: flex; gap: 4px; flex: 1; justify-content: flex-end;">
+                                    <button class="overlay-btn" id="btnTrimStart"
+                                        title="Fijar Inicio en posición actual">In: 0.0s</button>
+                                    <button class="overlay-btn" id="btnTrimEnd"
+                                        title="Fijar Fin en posición actual">Out: Fin</button>
+                                </div>
+                            </div>
 
                             <!-- Action Buttons (New) -->
                             <div class="overlay-actions" style="display: flex; gap: 8px; margin-top: 4px;">
@@ -1726,6 +1736,8 @@
             intensity: 15,
             padding: 0.1, // 10% por defecto
             detectionMode: 'all',
+            trimStart: 0,
+            trimEnd: null, // null means end of video
             previewMode: 'effects', // ALWAYS effects
             processedBlob: null,
             videoBlobUrl: null,
@@ -2193,7 +2205,24 @@
                 }
             });
 
-            // Time update
+            // Trim Controls
+            const btnTrimStart = document.getElementById('btnTrimStart');
+            const btnTrimEnd = document.getElementById('btnTrimEnd');
+
+            btnTrimStart.addEventListener('click', () => {
+                state.trimStart = video.currentTime;
+                btnTrimStart.textContent = `In: ${state.trimStart.toFixed(1)}s`;
+                btnTrimStart.classList.add('active');
+            });
+
+            btnTrimEnd.addEventListener('click', () => {
+                state.trimEnd = video.currentTime;
+                btnTrimEnd.textContent = `Out: ${state.trimEnd.toFixed(1)}s`;
+                btnTrimEnd.classList.add('active');
+            });
+
+            // Reset Trim when loading new video (handled in resetAppState)
+
             video.addEventListener('timeupdate', updateProgress);
 
             // Video ended - Stop detection loop
@@ -2334,6 +2363,16 @@
             state.highlightedPersonId = null;
             state.previewPersistenceCount = 0;
             state.previewMode = 'effects'; // Always reset to effects
+
+            // Reset Trim
+            state.trimStart = 0;
+            state.trimEnd = null;
+            if (document.getElementById('btnTrimStart')) {
+                document.getElementById('btnTrimStart').textContent = 'In: 0.0s';
+                document.getElementById('btnTrimStart').classList.remove('active');
+                document.getElementById('btnTrimEnd').textContent = 'Out: Fin';
+                document.getElementById('btnTrimEnd').classList.remove('active');
+            }
 
             // Reset UI
             elements.playBtn.textContent = '▶';
@@ -2796,13 +2835,26 @@
             const frameTime = 1 / fps;
             const ctx = processCanvas.getContext('2d', { willReadFrequently: true });
 
+            // Define Trim Range
+            const startTime = state.trimStart || 0;
+            const endTime = state.trimEnd || video.duration;
+            const procDuration = endTime - startTime;
+
+            if (procDuration <= 0) {
+                alert('El rango de recorte es inválido');
+                state.isProcessing = false;
+                elements.processBtn.disabled = false;
+                elements.modal.classList.remove('active');
+                return;
+            }
+
             const frames = [];
-            video.currentTime = 0;
+            video.currentTime = startTime;
 
             // Wait for video to be stable
             await new Promise(r => setTimeout(r, 1000));
 
-            const totalFrames = Math.ceil(duration / frameTime);
+            const totalFrames = Math.ceil(procDuration / frameTime);
             let currentFrame = 0;
 
             async function seekTo(time) {
@@ -2824,7 +2876,7 @@
             let persistenceCounter = 0;
             const MAX_PERSISTENCE = 6; // Mantener detecciones durante 6 frames si se pierden
 
-            for (let time = 0; time < duration; time += frameTime) {
+            for (let time = startTime; time < endTime; time += frameTime) {
                 if (state.processingCanceled) {
                     state.isProcessing = false;
                     elements.processBtn.disabled = false;
@@ -3062,9 +3114,8 @@
 
             recorder.start();
 
-            // Reiniciar video para asegurar sincronía de audio si se captura del elemento
-            // Reiniciar video para asegurar sincronía de audio si se captura del elemento
-            video.currentTime = 0;
+            // Reiniciar video en el punto de inicio del recorte para el audio
+            video.currentTime = state.trimStart || 0;
             video.muted = false; // Unmute to allow capture
             video.volume = 1.0;
             video.play().catch(e => console.log('Silent play for audio export', e));
