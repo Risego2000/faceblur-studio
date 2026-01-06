@@ -306,8 +306,8 @@
             position: absolute;
             bottom: 24px;
             left: 24px;
-            background: rgba(0, 0, 0, 0.80);
-            /* 20% Translucent */
+            background: rgba(0, 0, 0, 0.50);
+            /* 50% Translucent */
             backdrop-filter: blur(12px);
             padding: 16px;
             border-radius: 20px;
@@ -807,8 +807,8 @@
             align-items: center;
             gap: 16px;
             padding: 16px 24px;
-            background: rgba(24, 24, 27, 0.80);
-            /* 20% Translucent */
+            background: rgba(24, 24, 27, 0.50);
+            /* 50% Translucent */
             backdrop-filter: blur(8px);
             border: 1px solid var(--border);
             border-top: none;
@@ -2864,7 +2864,6 @@
 
             // Intentar capturar audio del video original
             try {
-                // Algúnos navegadores requieren que el video se esté reproduciendo o tenga volumen
                 let audioStream;
                 if (video.captureStream) audioStream = video.captureStream();
                 else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
@@ -2906,7 +2905,10 @@
             recorder.start();
 
             // Reiniciar video para asegurar sincronía de audio si se captura del elemento
+            // Reiniciar video para asegurar sincronía de audio si se captura del elemento
             video.currentTime = 0;
+            video.muted = false; // Unmute to allow capture
+            video.volume = 1.0;
             video.play().catch(e => console.log('Silent play for audio export', e));
 
             const img = new Image();
@@ -2919,7 +2921,8 @@
                     // Dar tiempo al encoder para finalizar
                     setTimeout(() => {
                         recorder.stop();
-                        video.pause(); // Detener video original
+                        video.pause();
+                        video.muted = true; // Restore mute
                     }, 500);
                     return;
                 }
