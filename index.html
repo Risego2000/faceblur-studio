@@ -2233,9 +2233,16 @@
 
         let isDetecting = false;
         let lastDetectionTime = 0;
+        let detectStartTime = 0; // Watchdog timer
         const DETECTION_INTERVAL = isMobile ? 60 : 30; // 60ms mobile (~15fps), 30ms desktop (~30fps) for fluid playback
 
         async function runBackgroundDetection() {
+            // Watchdog: If detection takes > 2s, force reset
+            if (isDetecting && (Date.now() - detectStartTime > 2000)) {
+                console.warn('Watchdog: Force resetting stuck detection');
+                isDetecting = false;
+            }
+
             if (isDetecting || !state.modelReady) {
                 if (!state.modelReady) {
                     console.warn('Detection skipped: Model not ready');
@@ -2245,57 +2252,59 @@
 
             // Intelligent Throttle: Ensures UI thread has time to render video smoothly
             const now = Date.now();
-            if (now - lastDetectionTime < DETECTION_INTERVAL) {
-                return;
+            // Debug log to find why it skips
+            // console.log('Skipping detection:', { isDetecting, ready: state.modelReady, throttled: (now - lastDetectionTime < DETECTION_INTERVAL) });
+            return;
+        }
+        lastDetectionTime = now;
+        detectStartTime = now; // For watchdog
+
+        isDetecting = true;
+        try {
+            console.log('Running face detection...');
+
+            // Use full detection if recognition is ready, otherwise basic
+            let detections;
+            if (!state.recognitionReady) {
+                // Basic detection (faster, no recognition)
+                detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                // Convert to format expected by rest of code
+                detections = detections.map(d => ({
+                    detection: d,
+                    identity: null
+                }));
+            } else {
+                // Full detection with recognition
+                detections = await faceapi.detectAllFaces(video, window.faceDetector)
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+                detections = await identifyFaces(detections);
             }
-            lastDetectionTime = now;
 
-            isDetecting = true;
-            try {
-                console.log('Running face detection...');
+            console.log(`Detected ${detections.length} faces`);
 
-                // Use full detection if recognition is ready, otherwise basic
-                let detections;
-                if (!state.recognitionReady) {
-                    // Basic detection (faster, no recognition)
-                    detections = await faceapi.detectAllFaces(video, window.faceDetector);
-                    // Convert to format expected by rest of code
-                    detections = detections.map(d => ({
-                        detection: d,
-                        identity: null
-                    }));
-                } else {
-                    // Full detection with recognition
-                    detections = await faceapi.detectAllFaces(video, window.faceDetector)
-                        .withFaceLandmarks()
-                        .withFaceDescriptors();
-                    detections = await identifyFaces(detections);
-                }
+            // Aplicar suavizado de cajas
+            const refined = detections.map(d => {
+                const smoothed = smoothBoundingBox(d);
+                return { ...d, smoothedBox: smoothed };
+            });
 
-                console.log(`Detected ${detections.length} faces`);
-
-                // Aplicar suavizado de cajas
-                const refined = detections.map(d => {
-                    const smoothed = smoothBoundingBox(d);
-                    return { ...d, smoothedBox: smoothed };
-                });
-
-                if (refined.length > 0) {
-                    state.lastKnownFaces = filterFaces(refined);
-                    // Much longer persistence on mobile to prevent gaps
-                    state.previewPersistenceCount = isMobile ? 30 : 20;
-                } else if (state.previewPersistenceCount > 0) {
-                    state.previewPersistenceCount--;
-                    // Keep using cached faces - this prevents frame gaps
-                } else {
-                    // Only clear faces after persistence expires
-                    state.lastKnownFaces = [];
-                }
-            } catch (e) {
-                console.error('Background detection error:', e);
-            } finally {
-                isDetecting = false;
+            if (refined.length > 0) {
+                state.lastKnownFaces = filterFaces(refined);
+                // Much longer persistence on mobile to prevent gaps
+                state.previewPersistenceCount = isMobile ? 30 : 20;
+            } else if (state.previewPersistenceCount > 0) {
+                state.previewPersistenceCount--;
+                // Keep using cached faces - this prevents frame gaps
+            } else {
+                // Only clear faces after persistence expires
+                state.lastKnownFaces = [];
             }
+        } catch (e) {
+            console.error('Background detection error:', e);
+        } finally {
+            isDetecting = false;
+        }
         }
 
         // EMA Smoothing logic to eliminate jitter for exact tracking
