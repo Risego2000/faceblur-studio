@@ -1596,12 +1596,15 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        video.style.position = 'absolute';
-        video.style.opacity = '0';
+        video.setAttribute('webkit-playsinline', 'true'); // Compatibility for older iOS
+        video.style.position = 'fixed';
+        video.style.top = '0';
+        video.style.left = '0';
+        video.style.width = '100vw'; // Full screen to satisfy "visibility" checks
+        video.style.height = '100vh';
+        video.style.opacity = '0.01'; // Visible but invisible
         video.style.pointerEvents = 'none';
-        video.style.width = '1px';
-        video.style.height = '1px';
-        video.style.left = '-9999px'; // Move off-screen but keep in DOM layout
+        video.style.zIndex = '-9999';
         document.body.appendChild(video);
 
         // Processing canvas
