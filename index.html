@@ -1732,51 +1732,52 @@
             }
 
             // Configure Detector
-            if (loadedModel === 'ssd') {
-                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 });
-            } else {
-                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 }); // 512 for better accuracy
+            // Lower threshold to detect profiles/turned heads
+            window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
+        } else {
+            // Lower threshold significantly for Tiny to catch side profiles
+            window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.15 });
+        }
+        state.detectorType = loadedModel;
+
+        // --- STAGE 2: RECOGNITION ---
+        const recogFiles = [
+            'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
+            'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
+        ];
+
+        updateModelStatus('rec', 0, 'Pendiente...');
+        state.recognitionReady = false;
+
+        for (const modelUrl of modelUrls) {
+            try {
+                await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
+
+                await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+
+                state.recognitionReady = true;
+                updateModelStatus('rec', 100, 'Reconocimiento Listo');
+                break;
+            } catch (e) {
+                console.warn('Recog fallback', e);
             }
-            state.detectorType = loadedModel;
+        }
 
-            // --- STAGE 2: RECOGNITION ---
-            const recogFiles = [
-                'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
-                'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
-            ];
+        if (!state.recognitionReady) {
+            updateModelStatus('rec', 0, 'No Disponible');
+        }
 
-            updateModelStatus('rec', 0, 'Pendiente...');
-            state.recognitionReady = false;
+        // Finalize
+        state.modelReady = true;
+        document.getElementById('mainStatusText').innerText = 'IA Lista';
+        updateAIStatus(true);
 
-            for (const modelUrl of modelUrls) {
-                try {
-                    await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
-
-                    await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                    await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-
-                    state.recognitionReady = true;
-                    updateModelStatus('rec', 100, 'Reconocimiento Listo');
-                    break;
-                } catch (e) {
-                    console.warn('Recog fallback', e);
-                }
-            }
-
-            if (!state.recognitionReady) {
-                updateModelStatus('rec', 0, 'No Disponible');
-            }
-
-            // Finalize
-            state.modelReady = true;
-            document.getElementById('mainStatusText').innerText = 'IA Lista';
-            updateAIStatus(true);
-
-            // Hide overlay after delay
-            setTimeout(() => {
-                const aiStatus = document.getElementById('aiStatus');
-                // Optional
-            }, 3000);
+        // Hide overlay after delay
+        setTimeout(() => {
+            const aiStatus = document.getElementById('aiStatus');
+            // Optional
+        }, 3000);
         }
 
         function updateAIStatus(ready) {
@@ -2304,8 +2305,8 @@
 
                 if (refined.length > 0) {
                     state.lastKnownFaces = filterFaces(refined);
-                    // Much longer persistence on mobile to prevent gaps
-                    state.previewPersistenceCount = isMobile ? 30 : 20;
+                    // Much longer persistence: ~2-3 seconds to handle full head turns
+                    state.previewPersistenceCount = isMobile ? 60 : 45;
                 } else if (state.previewPersistenceCount > 0) {
                     state.previewPersistenceCount--;
                     // Keep using cached faces - this prevents frame gaps
@@ -2605,7 +2606,8 @@
 
             let lastKnownFaces = [];
             let persistenceCounter = 0;
-            const MAX_PERSISTENCE = 6; // Mantener detecciones durante 6 frames si se pierden
+            // Persistence for export: 30 frames = 1 second of "memory" if face is lost
+            const MAX_PERSISTENCE = 30;
 
             for (let time = 0; time < duration; time += frameTime) {
                 if (state.processingCanceled) {
