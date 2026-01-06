@@ -200,12 +200,24 @@
             max-height: 100%;
         }
 
+        @media (max-width: 767px) {
+            .sidebar {
+                padding: 12px;
+            }
+        }
+
         .sidebar-section {
             margin-bottom: 20px;
         }
 
         .sidebar-section:last-child {
             margin-bottom: 0;
+        }
+
+        @media (max-width: 767px) {
+            .sidebar-section {
+                margin-bottom: 12px;
+            }
         }
 
         .section-title {
@@ -227,6 +239,13 @@
             background: var(--border);
         }
 
+        @media (max-width: 767px) {
+            .section-title {
+                font-size: 10px;
+                margin-bottom: 6px;
+            }
+        }
+
         /* Buttons */
         .btn {
             padding: 10px 16px;
@@ -241,6 +260,14 @@
             gap: 8px;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             user-select: none;
+        }
+
+        @media (max-width: 767px) {
+            .btn {
+                padding: 8px 12px;
+                font-size: 13px;
+                border-radius: 10px;
+            }
         }
 
         .btn-primary {
@@ -275,6 +302,12 @@
             gap: 12px;
         }
 
+        @media (max-width: 767px) {
+            .effect-grid {
+                gap: 8px;
+            }
+        }
+
         .effect-option {
             padding: 16px 12px;
             background: var(--bg-dark);
@@ -285,6 +318,13 @@
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+        }
+
+        @media (max-width: 767px) {
+            .effect-option {
+                padding: 10px 8px;
+                border-radius: 8px;
+            }
         }
 
         .effect-option.active {
@@ -322,6 +362,13 @@
             border-radius: 8px;
         }
 
+        @media (max-width: 767px) {
+            .slider-wrapper {
+                padding: 3px;
+                border-radius: 6px;
+            }
+        }
+
         .slider-header {
             display: flex;
             justify-content: space-between;
@@ -329,6 +376,13 @@
             font-size: 13px;
             color: var(--text-muted);
             font-weight: 500;
+        }
+
+        @media (max-width: 767px) {
+            .slider-header {
+                margin-bottom: 6px;
+                font-size: 11px;
+            }
         }
 
         #intensityVal,
@@ -434,6 +488,12 @@
             gap: 8px;
         }
 
+        @media (max-width: 767px) {
+            .preview-toggle {
+                gap: 6px;
+            }
+        }
+
         .preview-btn {
             flex: 1;
             padding: 8px 6px;
@@ -444,6 +504,14 @@
             font-size: 12px;
             cursor: pointer;
             transition: all 0.2s;
+        }
+
+        @media (max-width: 767px) {
+            .preview-btn {
+                padding: 6px 4px;
+                font-size: 11px;
+                border-radius: 6px;
+            }
         }
 
         .preview-btn:hover {
@@ -483,6 +551,14 @@
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             background: var(--bg-card);
             box-shadow: var(--shadow-lg);
+        }
+
+        @media (max-width: 767px) {
+            .upload-area {
+                padding: 40px 20px;
+                max-width: 100%;
+                border-radius: 16px;
+            }
         }
 
         .upload-area:hover,
@@ -944,6 +1020,17 @@
                 font-size: 11px;
             }
         }
+
+        /* People List */
+        .people-list {
+            max-height: 120px;
+        }
+
+        @media (max-width: 767px) {
+            .people-list {
+                max-height: 60px;
+            }
+        }
     </style>
 </head>
 
@@ -991,8 +1078,8 @@
                 </div>
 
                 <div class="section-title" style="margin-top: 16px;">Personas Detectadas</div>
-                <div id="peopleList"
-                    style="display: flex; flex-direction: column; gap: 8px; max-height: 120px; overflow-y: auto; padding-right: 4px;">
+                <div id="peopleList" class="people-list"
+                    style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px;">
                     <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">
                         Reproduce el vídeo para listar personas...
                     </p>
@@ -1415,7 +1502,10 @@
             elements.exportBtn.addEventListener('click', exportVideo);
 
             // New video
-            elements.newBtn.addEventListener('click', resetApp);
+            // Nuevo Video button - open file selector
+            elements.newBtn.addEventListener('click', () => {
+                elements.fileInput.click();
+            });
 
             // Cancel processing
             elements.cancelBtn.addEventListener('click', () => {
