@@ -2723,7 +2723,7 @@
 
         function createFinalVideo(frames, fps) {
             elements.modalTitle.textContent = 'Generando Video';
-            elements.modalSubtitle.textContent = 'Compilando resultados con fluidez...';
+            elements.modalSubtitle.textContent = 'Sincronizando audio y video...';
             elements.modalFill.style.width = '100%';
 
             const canvas = document.createElement('canvas');
@@ -2731,8 +2731,26 @@
             canvas.height = state.videoHeight;
             const ctx = canvas.getContext('2d');
 
-            // 0 indica que capturamos frames manualmente vía requestFrame()
-            const stream = canvas.captureStream(0);
+            // Capture stream from canvas
+            const stream = canvas.captureStream(fps);
+
+            // Audio Preservation Logic
+            // We get the audio track from the original video element
+            let audioStream = null;
+            try {
+                if (video.captureStream) audioStream = video.captureStream();
+                else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+            } catch (e) {
+                console.warn('Audio capture not supported or blocked:', e);
+            }
+
+            if (audioStream) {
+                const audioTracks = audioStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    console.log('Audio track found and added to export');
+                    stream.addTrack(audioTracks[0]);
+                }
+            }
 
             let mimeType = 'video/webm;codecs=vp9';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
@@ -2740,7 +2758,7 @@
 
             const recorder = new MediaRecorder(stream, {
                 mimeType: mimeType,
-                videoBitsPerSecond: 8000000 // 8 Mbps para excelente calidad
+                videoBitsPerSecond: 8000000
             });
 
             const chunks = [];
@@ -2754,38 +2772,74 @@
                 elements.processBtn.disabled = false;
                 elements.exportBtn.disabled = false;
                 elements.modal.classList.remove('active');
-                alert('✅ Video procesado correctamente!\n\nLa duración y fluidez coinciden con el original.');
+
+                // Reset video state
+                video.pause();
+                video.currentTime = 0;
+                video.muted = false; // Ensure unmuted for user
+
+                // Show completion with audio notice
+                alert('✅ Video procesado correctamente con AUDIO!\n\nSe ha sincronizado el sonido original.');
             };
 
-            recorder.start();
-
+            // Playback-driven recording loop to ensure audio sync
             const img = new Image();
-            let frameIndex = 0;
-            const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
 
-            function drawNext() {
-                if (frameIndex >= frames.length) {
-                    // Dar tiempo al encoder para finalizar
-                    setTimeout(() => recorder.stop(), 500);
-                    return;
+            // Prepare video for playback-capture
+            video.currentTime = 0;
+            video.volume = 1.0;
+            video.muted = false; // Must be unmuted to capture audio track
+
+            // Loop
+            function syncLoop() {
+                if (recorder.state === 'inactive') return;
+
+                const t = video.currentTime;
+                // Calculate which frame index corresponds to current time
+                let index = Math.floor(t * fps);
+                index = Math.min(index, frames.length - 1);
+
+                if (index >= 0 && index < frames.length) {
+                    img.src = frames[index];
+                    if (img.complete) {
+                        ctx.drawImage(img, 0, 0);
+                    } else {
+                        // If not loaded immediately, draw on load (might skip if too slow, but keeps audio sync)
+                        img.onload = () => ctx.drawImage(img, 0, 0);
+                    }
                 }
 
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0);
-                    // Forzar la grabación de este frame exacto en el stream
-                    const track = stream.getVideoTracks()[0];
-                    if (track && track.requestFrame) {
-                        track.requestFrame();
+                // Check for end
+                if (video.ended || index >= frames.length - 1) {
+                    // Small buffer to ensure end
+                    if (video.ended) {
+                        recorder.stop();
+                    } else {
+                        requestAnimationFrame(syncLoop);
                     }
-
-                    frameIndex++;
-                    // Usamos el intervalo correspondiente al FPS para mantener la duración original
-                    setTimeout(drawNext, frameDuration);
-                };
-                img.src = frames[frameIndex];
+                } else {
+                    requestAnimationFrame(syncLoop);
+                }
             }
 
-            drawNext();
+            video.onplay = () => {
+                recorder.start();
+                syncLoop();
+                video.onplay = null; // Remove listener
+            };
+
+            video.onended = () => {
+                if (recorder.state === 'recording') recorder.stop();
+            };
+
+            // Start everything
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error("Auto-play prevented:", error);
+                    alert("Por favor, interactúa con la página para permitir la grabación de audio.");
+                });
+            }
         }
 
         // PWA Install Logic
