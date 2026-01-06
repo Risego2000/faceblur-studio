@@ -2899,8 +2899,8 @@
 
         function createFinalVideo(frames, fps) {
             elements.modalTitle.textContent = 'Generando Video';
-            elements.modalSubtitle.textContent = 'Compilando resultados con fluidez...';
-            elements.modalFill.style.width = '100%';
+            elements.modalSubtitle.textContent = 'Compilando resultados... 0%';
+            elements.modalFill.style.width = '0%';
 
             const canvas = document.createElement('canvas');
             canvas.width = state.videoWidth;
@@ -3019,12 +3019,10 @@
 
             function drawNext() {
                 if (frameIndex >= frames.length) {
-                    // Dar tiempo al encoder para finalizar
-                    // Dar tiempo al encoder para finalizar
                     setTimeout(() => {
-                        recorder.stop();
+                        if (recorder.state === 'recording') recorder.stop();
                         video.pause();
-                        video.muted = true; // Restore mute
+                        video.muted = true;
                     }, 500);
                     return;
                 }
@@ -3037,10 +3035,22 @@
                         track.requestFrame();
                     }
 
+                    // Feedback Visual
+                    const pct = Math.round((frameIndex / frames.length) * 100);
+                    elements.modalSubtitle.textContent = `Compilando resultados: ${pct}%`;
+                    elements.modalFill.style.width = pct + '%';
+
                     frameIndex++;
                     // Usamos el intervalo correspondiente al FPS para mantener la duración original
                     setTimeout(drawNext, frameDuration);
                 };
+
+                img.onerror = (e) => {
+                    console.error('Frame error at index ' + frameIndex, e);
+                    frameIndex++;
+                    drawNext();
+                };
+
                 img.src = frames[frameIndex];
             }
 
