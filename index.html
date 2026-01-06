@@ -2022,17 +2022,21 @@
                     }
                 } else if (detectorType === 'mtcnn') {
                     // MTCNN from face-api.js
-                    const mtcnnFiles = ['mtcnn_model-weights_manifest.json', 'mtcnn_model-shard1'];
+                    // MTCNN has multiple model files
                     for (const modelUrl of modelUrls) {
                         try {
-                            await prefetchFiles(modelUrl, mtcnnFiles, (pct, text) => updateModelStatus('det', pct, text));
+                            updateModelStatus('det', 30, 'Cargando MTCNN...');
                             await faceapi.nets.mtcnn.loadFromUri(modelUrl);
                             loadedModel = 'mtcnn';
                             updateModelStatus('det', 100, 'MTCNN Listo');
                             break;
                         } catch (e) {
-                            console.warn('MTCNN fallback', e);
+                            console.warn('MTCNN fallback:', e);
                         }
+                    }
+
+                    if (!loadedModel) {
+                        throw new Error('MTCNN no pudo cargar desde ninguna fuente');
                     }
                 } else if (detectorType === 'tiny') {
                     // Tiny Face Detector
@@ -2309,7 +2313,7 @@
                 'auto': 'Selección automática según dispositivo',
                 'ssd': 'Equilibrado: Buena precisión y velocidad (2MB)',
                 'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
-                'mtcnn': 'Máxima precisión: Mejor con ángulos difíciles (2MB)',
+                'mtcnn': 'Requiere modelos adicionales (usa Tiny como alternativa)',
                 'blazeface': 'Ultra rápido: 200+ FPS, muy ligero (100KB)',
                 'mediapipe': 'Google: Optimizado WebAssembly, muy preciso (1MB)',
                 'yolo': 'Profesional: YOLOv8 con GPU, máxima precisión (6MB)'
