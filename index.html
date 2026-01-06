@@ -1882,14 +1882,25 @@
             video.src = url;
             video.muted = true; // Essential for auto-loading on some mobiles
             video.playsInline = true;
-            video.load();
 
-            // Mobile Hack: Seek slightly to force frame buffer
-            // Then pause immediately to show the first frame
-            const mobileUnlock = () => {
-                video.currentTime = 0.01;
+            // Mobile Strategy: Force play to start decoding, then pause immediately
+            // This is the most reliable way to get the first frame on iOS/Android
+            const onPlaying = () => {
+                video.pause();
+                video.currentTime = 0;
+                // Force initial render
+                if (typeof renderFrame === 'function') renderFrame();
             };
-            video.addEventListener('loadedmetadata', mobileUnlock, { once: true });
+            video.addEventListener('playing', onPlaying, { once: true });
+
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.warn("Auto-play prevented (expected on some mobiles):", error);
+                    // Fallback if play() fails: just load()
+                    // video.load() is implicit when setting src, but ensuring it helps
+                });
+            }
 
             video.onerror = () => {
                 alert('Error al cargar el video.');
