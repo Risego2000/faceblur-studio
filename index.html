@@ -1374,26 +1374,21 @@
                 state.detectorType = loadedModel;
 
                 // Load additional models for recognition/tracking
-                // On mobile, skip these heavy models to ensure detection works
-                if (!isMobile) {
-                    elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
-                    for (const modelUrl of modelUrls) {
-                        try {
-                            await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                            await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-                            console.log('✅ Modelos de reconocimiento cargados');
-                            break;
-                        } catch (e) {
-                            console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
-                        }
+                elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
+                for (const modelUrl of modelUrls) {
+                    try {
+                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+                        console.log('✅ Modelos de reconocimiento cargados');
+                        break;
+                    } catch (e) {
+                        console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
                     }
-                } else {
-                    console.log('📱 Móvil detectado: Saltando modelos de reconocimiento para mejor rendimiento');
                 }
 
                 state.modelReady = true;
                 updateAIStatus(true);
-                console.log(`✅ IA lista usando detector: ${loadedModel}${isMobile ? ' (modo móvil)' : ' + Recognition'}`);
+                console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
 
             } catch (error) {
                 console.error('Error crítico cargando modelos:', error);
