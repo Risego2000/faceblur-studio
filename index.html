@@ -2775,6 +2775,25 @@
             drawNext();
         }
 
+        // PWA Install Logic
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (installBtn) {
+                installBtn.style.display = 'block';
+                installBtn.addEventListener('click', async () => {
+                    installBtn.style.display = 'none';
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    deferredPrompt = null;
+                });
+            }
+        });
+
         // Service Worker Registration for PWA/Local Caching
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

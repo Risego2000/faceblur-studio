@@ -23,7 +23,7 @@ const ASSETS_TO_CACHE = [
     './models/face_recognition_model-weights_manifest.json',
     './models/face_recognition_model-shard1',
     './models/face_recognition_model-shard2',
-    './icon.svg'
+    './logo.jpg'
 ];
 
 self.addEventListener('install', (event) => {
