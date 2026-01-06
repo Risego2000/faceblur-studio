@@ -1523,6 +1523,18 @@
                 height: 40px;
             }
         }
+
+        /* Overlay collapsed state */
+        .video-overlay-status.collapsed .overlay-params,
+        .video-overlay-status.collapsed .overlay-progress-container,
+        .video-overlay-status.collapsed .overlay-row,
+        .video-overlay-status.collapsed .overlay-controls:not(#overlayToggle) {
+            display: none !important;
+        }
+
+        .video-overlay-status.collapsed {
+            padding: 8px;
+        }
     </style>
 </head>
 
@@ -1595,6 +1607,12 @@
 
                     <!-- AI Status Overlay -->
                     <div class="video-overlay-status" id="aiStatus">
+                        <!-- Toggle Button -->
+                        <button id="overlayToggle" class="overlay-btn"
+                            style="width: 100%; margin-bottom: 8px; background: rgba(255,255,255,0.1);">
+                            ⚙️ Controles
+                        </button>
+
                         <!-- Model Selection -->
                         <div class="overlay-controls" id="modelSelection">
                             <button class="overlay-btn active" data-model="auto">Auto</button>
@@ -2222,6 +2240,16 @@
             });
 
             // Reset Trim when loading new video (handled in resetAppState)
+
+            // Overlay Toggle
+            const overlayToggle = document.getElementById('overlayToggle');
+            if (overlayToggle) {
+                overlayToggle.addEventListener('click', () => {
+                    const overlay = document.getElementById('aiStatus');
+                    overlay.classList.toggle('collapsed');
+                    overlayToggle.textContent = overlay.classList.contains('collapsed') ? '⚙️ Mostrar' : '⚙️ Controles';
+                });
+            }
 
             video.addEventListener('timeupdate', updateProgress);
 
