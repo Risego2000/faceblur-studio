@@ -1716,9 +1716,21 @@
 
         // Event Listeners
         function setupEventListeners() {
+            console.log('Setting up event listeners...');
+
+            // Menu Toggle
+            if (elements.menuToggle && elements.sidebar) {
+                elements.menuToggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    elements.sidebar.classList.toggle('active');
+                });
+            }
+
             // Upload
-            elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
-            elements.fileInput.addEventListener('change', handleFileSelect);
+            if (elements.uploadArea && elements.fileInput) {
+                elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
+                elements.fileInput.addEventListener('change', handleFileSelect);
+            }
 
             // Drag and drop
             elements.uploadArea.addEventListener('dragover', (e) => {
