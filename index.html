@@ -1325,6 +1325,7 @@
             height: 4px;
             border-radius: 2px;
             -webkit-appearance: none;
+            appearance: none;
             background: rgba(255, 255, 255, 0.2);
         }
 
@@ -1651,13 +1652,7 @@
                                 <span id="paddingVal">10%</span>
                             </div>
 
-                            <div class="overlay-slider-row">
-                                <span>Audio</span>
-                                <button id="audioToggleBtn" class="overlay-btn active"
-                                    style="margin-left: auto; width: 60px;">
-                                    🔊 Si
-                                </button>
-                            </div>
+
 
                             <!-- Action Buttons (New) -->
                             <div class="overlay-actions" style="display: flex; gap: 8px; margin-top: 4px;">
@@ -1730,7 +1725,6 @@
             effect: 'pixelate',
             intensity: 15,
             padding: 0.1, // 10% por defecto
-            includeAudio: true,
             detectionMode: 'all',
             previewMode: 'effects', // ALWAYS effects
             processedBlob: null,
@@ -2169,20 +2163,7 @@
                 renderFrame();
             });
 
-            // Audio toggle
-            const audioBtn = document.getElementById('audioToggleBtn');
-            if (audioBtn) {
-                audioBtn.addEventListener('click', () => {
-                    state.includeAudio = !state.includeAudio;
-                    if (state.includeAudio) {
-                        audioBtn.classList.add('active');
-                        audioBtn.textContent = '🔊 Si';
-                    } else {
-                        audioBtn.classList.remove('active');
-                        audioBtn.textContent = '🔇 No';
-                    }
-                });
-            }
+
 
             // Preview toggle removed - always effects
             // const previewOriginal = document.getElementById('previewOriginal');
@@ -2200,9 +2181,16 @@
                 elements.fileInput.click();
             });
 
-            // Cancel processing
+            // Cancel processing / Close Modal
             elements.cancelBtn.addEventListener('click', () => {
-                state.processingCanceled = true;
+                if (state.isProcessing) {
+                    state.processingCanceled = true;
+                } else {
+                    // Close modal if finished
+                    elements.modal.classList.remove('active');
+                    // Reset text for next time
+                    elements.cancelBtn.textContent = 'Cancelar';
+                }
             });
 
             // Time update
@@ -2964,36 +2952,35 @@
             // 0 indica que capturamos frames manualmente vía requestFrame()
             const stream = canvas.captureStream(0);
 
-            // Intentar capturar audio del video original si está habilitado
-            if (state.includeAudio) {
-                try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        const audioCtx = new AudioContext();
-                        const source = audioCtx.createMediaElementSource(video);
-                        const dest = audioCtx.createMediaStreamDestination();
-                        source.connect(dest);
+            // Intentar capturar audio del video original siempre
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    const audioCtx = new AudioContext();
+                    const source = audioCtx.createMediaElementSource(video);
+                    const dest = audioCtx.createMediaStreamDestination();
+                    source.connect(dest);
 
-                        const audioTracks = dest.stream.getAudioTracks();
-                        if (audioTracks.length > 0) {
-                            stream.addTrack(audioTracks[0]);
-                            console.log('Audio track added via WebAudio API');
-                        }
-                    } else {
-                        // Fallback para navegadores antiguos
-                        let audioStream;
-                        if (video.captureStream) audioStream = video.captureStream();
-                        else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
-
-                        if (audioStream) {
-                            const audioTracks = audioStream.getAudioTracks();
-                            if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
-                        }
+                    const audioTracks = dest.stream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        stream.addTrack(audioTracks[0]);
+                        console.log('Audio track added via WebAudio API');
                     }
-                } catch (e) {
-                    console.warn('Could not capture audio:', e);
+                } else {
+                    // Fallback para navegadores antiguos
+                    let audioStream;
+                    if (video.captureStream) audioStream = video.captureStream();
+                    else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+
+                    if (audioStream) {
+                        const audioTracks = audioStream.getAudioTracks();
+                        if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
+                    }
                 }
+            } catch (e) {
+                console.warn('Could not capture audio:', e);
             }
+
 
             let mimeType = 'video/webm;codecs=vp9,opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
