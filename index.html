@@ -1374,21 +1374,26 @@
                 state.detectorType = loadedModel;
 
                 // Load additional models for recognition/tracking
-                elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
-                for (const modelUrl of modelUrls) {
-                    try {
-                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-                        console.log('✅ Modelos de reconocimiento cargados');
-                        break;
-                    } catch (e) {
-                        console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
+                // On mobile, skip these heavy models to ensure detection works
+                if (!isMobile) {
+                    elements.aiStatus.querySelector('span').textContent = 'Cargando Reconocimiento...';
+                    for (const modelUrl of modelUrls) {
+                        try {
+                            await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                            await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+                            console.log('✅ Modelos de reconocimiento cargados');
+                            break;
+                        } catch (e) {
+                            console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
+                        }
                     }
+                } else {
+                    console.log('📱 Móvil detectado: Saltando modelos de reconocimiento para mejor rendimiento');
                 }
 
                 state.modelReady = true;
                 updateAIStatus(true);
-                console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
+                console.log(`✅ IA lista usando detector: ${loadedModel}${isMobile ? ' (modo móvil)' : ' + Recognition'}`);
 
             } catch (error) {
                 console.error('Error crítico cargando modelos:', error);
@@ -1747,12 +1752,24 @@
             isDetecting = true;
             try {
                 console.log('Running face detection...');
-                let detections = await faceapi.detectAllFaces(video, window.faceDetector)
-                    .withFaceLandmarks()
-                    .withFaceDescriptors();
+
+                // On mobile, use simpler detection without landmarks/descriptors
+                let detections;
+                if (isMobile) {
+                    detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                    // Convert to format expected by rest of code
+                    detections = detections.map(d => ({
+                        detection: d,
+                        identity: null
+                    }));
+                } else {
+                    detections = await faceapi.detectAllFaces(video, window.faceDetector)
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+                    detections = await identifyFaces(detections);
+                }
 
                 console.log(`Detected ${detections.length} faces`);
-                detections = await identifyFaces(detections);
 
                 // Aplicar suavizado de cajas
                 const refined = detections.map(d => {
