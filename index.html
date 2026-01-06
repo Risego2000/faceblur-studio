@@ -1554,6 +1554,9 @@
         }
 
         function loadVideo(file) {
+            // RESET APP STATE when loading new video
+            resetAppState();
+
             if (state.videoBlobUrl) {
                 URL.revokeObjectURL(state.videoBlobUrl);
             }
@@ -1590,6 +1593,45 @@
                     elements.processBtn.disabled = false;
                 }
             };
+        }
+
+        // Reset app state when loading new video
+        function resetAppState() {
+            // Stop playback
+            if (!video.paused) {
+                video.pause();
+                stopPreviewLoop();
+            }
+
+            // Reset state
+            state.isPlaying = false;
+            state.isProcessing = false;
+            state.processingCanceled = false;
+            state.processedBlob = null;
+            state.lastKnownFaces = [];
+            state.knownFaces = [];
+            state.smoothedBoxes = {};
+            state.highlightedPersonId = null;
+            state.previewPersistenceCount = 0;
+            state.previewMode = 'original';
+
+            // Reset UI
+            elements.playBtn.textContent = '▶';
+            elements.processBtn.disabled = true;
+            elements.exportBtn.disabled = true;
+
+            // Clear people list
+            elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+
+            // Reset preview buttons
+            const previewOriginal = document.getElementById('previewOriginal');
+            const previewEffects = document.getElementById('previewEffects');
+            if (previewOriginal && previewEffects) {
+                previewOriginal.classList.add('active');
+                previewEffects.classList.remove('active');
+            }
+
+            console.log('App state reset for new video');
         }
 
         // Playback controls
