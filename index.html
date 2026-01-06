@@ -192,7 +192,7 @@
         .app {
             display: flex;
             flex-direction: column;
-            height: calc(100vh - 55px);
+            height: 100vh;
             overflow: hidden;
         }
 
@@ -1288,28 +1288,86 @@
         /* Adjust loading progress inside overlay */
         .video-overlay-status .loading-progress {
             display: none;
-            /* Hide old bar */
+        }
+
+        /* Mobile / Responsive Overrides */
+        @media (max-width: 768px) {
+            .branding-large h1 {
+                font-size: 24px !important;
+            }
+
+            .branding-large .logo-icon {
+                font-size: 36px !important;
+            }
+
+            .workspace {
+                padding: 0;
+            }
+
+            .upload-area {
+                padding: 24px;
+                margin: 20px;
+                max-width: calc(100% - 40px);
+                border-width: 1px;
+            }
+
+            .video-overlay-status {
+                bottom: 74px;
+                /* Just above controls */
+                width: 92%;
+                max-width: 400px;
+                padding: 8px;
+                gap: 8px;
+            }
+
+            .overlay-params {
+                max-height: 250px;
+                overflow-y: auto;
+                padding-right: 4px;
+                /* Space for scrollbar */
+            }
+
+            .overlay-controls {
+                flex-wrap: wrap;
+                /* Allow wrapping if tight */
+            }
+
+            .overlay-btn {
+                padding: 6px 10px;
+                font-size: 10px;
+            }
+
+            .video-controls {
+                padding: 12px 16px;
+                gap: 12px;
+            }
+
+            .play-btn,
+            .ctrl-btn {
+                width: 40px;
+                height: 40px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <header>
-        <div class="logo">
-            <button class="menu-toggle" id="menuToggle" style="display: none !important;">☰</button>
-            <div class="logo-icon">🎭</div>
-            <h1>FaceAnon <span
-                    style="font-size: 10px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 2px 6px; border-radius: 4px; vertical-align: middle; margin-left: 4px; font-weight: 800; display: inline-block; line-height: 1; opacity: 1 !important; visibility: visible !important;">PRO</span>
-            </h1>
-        </div>
-    </header>
+
 
     <div class="app">
 
 
         <main class="workspace">
             <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">✨</div>
+                <div class="branding-large" style="margin-bottom: 24px;">
+                    <div class="logo-icon" style="font-size: 48px; margin-bottom: 8px;">🎭</div>
+                    <h1
+                        style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; background: linear-gradient(to bottom, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0;">
+                        FaceAnon <span
+                            style="font-size: 14px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 4px 8px; border-radius: 6px; vertical-align: middle; margin-left: 6px; font-weight: 800; display: inline-block; line-height: 1;">PRO</span>
+                    </h1>
+                </div>
+                <!-- <div class="upload-icon">✨</div> -->
                 <h2 class="upload-title">Empieza con tu Video</h2>
                 <p class="upload-subtitle">
                     Arrastra tu archivo aquí o usa el botón para explorar.<br>
