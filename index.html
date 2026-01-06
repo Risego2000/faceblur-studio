@@ -301,11 +301,24 @@
             filter: grayscale(0.5);
         }
 
-        /* Effect Options */
-        .effect-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
+        /* Desktop Overlay (Bottom Left) */
+        .video-overlay-status {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: rgba(0, 0, 0, 0.80);
+            /* 20% Translucent */
+            backdrop-filter: blur(12px);
+            padding: 16px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
             gap: 12px;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            width: 280px;
         }
 
         @media (max-width: 767px) {
@@ -794,7 +807,8 @@
             align-items: center;
             gap: 16px;
             padding: 16px 24px;
-            background: rgba(24, 24, 27, 0.95);
+            background: rgba(24, 24, 27, 0.80);
+            /* 20% Translucent */
             backdrop-filter: blur(8px);
             border: 1px solid var(--border);
             border-top: none;
@@ -1337,6 +1351,20 @@
             border-radius: 18px;
             padding: 2px;
             gap: 2px;
+        }
+
+        /* Mobile Adjustments */
+        .video-overlay-status {
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 94%;
+            max-width: 400px;
+            padding: 12px;
+            gap: 10px;
+            border-radius: 24px;
+            background: rgba(0, 0, 0, 0.80);
+            /* 20% Translucent */
         }
 
         .overlay-btn {
@@ -2834,8 +2862,26 @@
             // 0 indica que capturamos frames manualmente vía requestFrame()
             const stream = canvas.captureStream(0);
 
-            let mimeType = 'video/webm;codecs=vp9';
-            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+            // Intentar capturar audio del video original
+            try {
+                // Algúnos navegadores requieren que el video se esté reproduciendo o tenga volumen
+                let audioStream;
+                if (video.captureStream) audioStream = video.captureStream();
+                else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+
+                if (audioStream) {
+                    const audioTracks = audioStream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        stream.addTrack(audioTracks[0]);
+                        console.log('Audio track added to export stream');
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not capture audio:', e);
+            }
+
+            let mimeType = 'video/webm;codecs=vp9,opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
 
             const recorder = new MediaRecorder(stream, {
@@ -2859,6 +2905,10 @@
 
             recorder.start();
 
+            // Reiniciar video para asegurar sincronía de audio si se captura del elemento
+            video.currentTime = 0;
+            video.play().catch(e => console.log('Silent play for audio export', e));
+
             const img = new Image();
             let frameIndex = 0;
             const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
@@ -2866,7 +2916,11 @@
             function drawNext() {
                 if (frameIndex >= frames.length) {
                     // Dar tiempo al encoder para finalizar
-                    setTimeout(() => recorder.stop(), 500);
+                    // Dar tiempo al encoder para finalizar
+                    setTimeout(() => {
+                        recorder.stop();
+                        video.pause(); // Detener video original
+                    }, 500);
                     return;
                 }
 
