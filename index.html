@@ -2012,12 +2012,21 @@
         let previewRequestId = null;
 
         function startPreviewLoop() {
-            function loop() {
+            let lastTime = 0;
+            const updateInterval = isMobile ? 1000 : 0; // 1 second update on mobile
+
+            function loop(timestamp) {
                 if (!state.isPlaying) return;
-                renderFrame();
+
+                if (!timestamp) timestamp = performance.now();
+
+                if (timestamp - lastTime >= updateInterval) {
+                    renderFrame();
+                    lastTime = timestamp;
+                }
                 previewRequestId = requestAnimationFrame(loop);
             }
-            loop();
+            previewRequestId = requestAnimationFrame(loop);
         }
 
         function stopPreviewLoop() {
