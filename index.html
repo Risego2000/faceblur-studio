@@ -2079,11 +2079,23 @@
 
                 // Detección exhaustiva con reconocimiento
                 try {
-                    let detections = await faceapi.detectAllFaces(video, window.faceDetector)
-                        .withFaceLandmarks()
-                        .withFaceDescriptors();
+                    let detections;
 
-                    detections = await identifyFaces(detections);
+                    // On mobile, use simpler detection without landmarks/descriptors
+                    if (isMobile) {
+                        detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                        // Convert to format expected by rest of code
+                        detections = detections.map(d => ({
+                            detection: d,
+                            identity: null
+                        }));
+                    } else {
+                        detections = await faceapi.detectAllFaces(video, window.faceDetector)
+                            .withFaceLandmarks()
+                            .withFaceDescriptors();
+                        detections = await identifyFaces(detections);
+                    }
+
                     let facesToProcess = filterFaces(detections);
 
                     // Persistencia Temporal Mejorada: Evita frames "limpios" por fallos momentáneos de la IA
