@@ -2998,10 +2998,11 @@
             let mimeType = 'video/webm;codecs=vp9,opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4'; // Safari iOS
 
             const recorder = new MediaRecorder(stream, {
                 mimeType: mimeType,
-                videoBitsPerSecond: 8000000 // 8 Mbps para excelente calidad
+                videoBitsPerSecond: 8000000
             });
 
             const chunks = [];
@@ -3009,18 +3010,22 @@
                 if (e.data.size > 0) chunks.push(e.data);
             };
 
-            recorder.onstop = () => {
-                console.log('Recorder stopped successfully');
-                video.pause();
-                video.muted = true; // Restore mute
-                state.processedBlob = new Blob(chunks, { type: 'video/webm' });
+            const finishProcessing = () => {
+                console.log('Finishing processing (Event or Watchdog)');
+                if (!state.isProcessing) return; // Already finished
+
                 state.isProcessing = false;
+                video.pause();
+                video.muted = true;
+
+                const blobType = recorder.mimeType || mimeType; // Use actual or fallback
+                state.processedBlob = new Blob(chunks, { type: blobType });
 
                 // Update Modal UI
                 elements.modalTitle.textContent = '¡Video Listo!';
                 elements.modalSubtitle.textContent = 'Selecciona una opción:';
 
-                // Hide Progress
+                // Hide Progress/Spinner
                 elements.modalFill.parentElement.style.display = 'none';
                 elements.modalPercent.style.display = 'none';
                 document.querySelector('.modal-spinner').style.display = 'none';
@@ -3030,19 +3035,21 @@
                 const actions = document.getElementById('modalActions');
                 actions.style.display = 'flex';
 
-                // Bind Actions
+                // Bind Download with correct extension
+                const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
                 document.getElementById('btnDownload').onclick = () => {
                     const url = URL.createObjectURL(state.processedBlob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `faceanon_pro_${Date.now()}.webm`;
+                    a.download = `faceanon_pro_${Date.now()}.${ext}`;
                     a.click();
                     URL.revokeObjectURL(url);
                 };
 
+                // Bind Share
                 document.getElementById('btnShare').onclick = async () => {
                     if (navigator.share) {
-                        const file = new File([state.processedBlob], `faceanon_pro_${Date.now()}.webm`, { type: 'video/webm' });
+                        const file = new File([state.processedBlob], `faceanon_pro_${Date.now()}.${ext}`, { type: blobType });
                         try {
                             await navigator.share({
                                 title: 'Video Anonimizado - FaceAnon PRO',
@@ -3059,7 +3066,11 @@
 
                 elements.processBtn.disabled = false;
                 elements.exportBtn.disabled = false;
-                // elements.modal.classList.remove('active'); // Keep active to show buttons
+            };
+
+            recorder.onstop = () => {
+                console.log('Recorder stopped event fired');
+                finishProcessing();
             };
 
             recorder.start();
@@ -3092,7 +3103,18 @@
                         if (recorder.state === 'recording') {
                             recorder.stop();
                             console.log('Recorder stop requested');
+                        } else {
+                            // Watchdog: If recorder was already stopped but UI didn't update
+                            finishProcessing();
                         }
+
+                        // Ultimate Watchdog for iOS (Safari sometimes swallows onstop)
+                        setTimeout(() => {
+                            if (state.isProcessing) {
+                                console.warn('Force finishing via watchdog');
+                                finishProcessing();
+                            }
+                        }, 2000);
                     }, 500);
                     return;
                 }
