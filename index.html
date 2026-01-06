@@ -2234,7 +2234,7 @@
 
         let isDetecting = false;
         let lastDetectionTime = 0;
-        const DETECTION_INTERVAL = isMobile ? 150 : 100; // Throttle detection on mobile (ms)
+        const DETECTION_INTERVAL = isMobile ? 60 : 30; // 60ms mobile (~15fps), 30ms desktop (~30fps) for fluid playback
 
         async function runBackgroundDetection() {
             if (isDetecting || !state.modelReady) {
@@ -2244,13 +2244,12 @@
                 return;
             }
 
-            // User requested frame-by-frame detection without skipping
-            // Removing throttle to process every possible frame
-            // const now = Date.now();
-            // if (isMobile && now - lastDetectionTime < DETECTION_INTERVAL) {
-            //    return;
-            // }
-            // lastDetectionTime = now;
+            // Intelligent Throttle: Ensures UI thread has time to render video smoothly
+            const now = Date.now();
+            if (now - lastDetectionTime < DETECTION_INTERVAL) {
+                return;
+            }
+            lastDetectionTime = now;
 
             isDetecting = true;
             try {
