@@ -1078,6 +1078,19 @@
             .people-list {
                 max-height: 60px;
             }
+
+            /* Resize video viewer on mobile to 80% screen height */
+            .video-card {
+                height: 80vh;
+                aspect-ratio: auto;
+                /* Allow height to dictate size */
+                max-height: 80vh;
+            }
+
+            .video-container {
+                height: 100%;
+                /* Fill the card */
+            }
         }
 
         /* Loading Progress Bar */
@@ -1583,19 +1596,93 @@
                 return;
             }
 
-            state.recognitionReady = true;
-            break;
-        } catch (e) {
-            console.warn(`Fallo reconocimiento en ${modelUrl}:`, e.message);
-        }
-                }
-        updateAIStatus(true);
-        console.log(`✅ IA lista usando detector: ${loadedModel} + Recognition`);
+            const modelUrls = [
+                './models/',
+                'https://justadudewhohacks.github.io/face-api.js/models/'
+            ];
 
-            } catch (error) {
-            console.error('Error crítico cargando modelos:', error);
-            updateAIStatus(false);
-        }
+            let loadedModel = null;
+            document.getElementById('mainStatusText').innerText = 'Iniciando Motores IA...';
+
+            // --- STAGE 1: DETECTOR ---
+            const useTiny = (state.modelPreference === 'auto' && isMobile) || state.modelPreference === 'tiny';
+            const detectorFiles = useTiny ?
+                ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'] :
+                ['ssd_mobilenetv1_model-weights_manifest.json', 'ssd_mobilenetv1_model-shard1', 'ssd_mobilenetv1_model-shard2'];
+
+            updateModelStatus('det', 0, 'Iniciando...');
+
+            for (const modelUrl of modelUrls) {
+                try {
+                    // Prefetch for real progress
+                    await prefetchFiles(modelUrl, detectorFiles, (pct, text) => updateModelStatus('det', pct, text));
+
+                    // Init Network
+                    if (useTiny) {
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
+                        loadedModel = 'tiny';
+                    } else {
+                        await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
+                        loadedModel = 'ssd';
+                    }
+                    updateModelStatus('det', 100, 'Detector Listo');
+                    break;
+                } catch (e) {
+                    console.warn('Detector fallback', e);
+                }
+            }
+
+            if (!loadedModel) {
+                updateModelStatus('det', 0, 'Fallo Crítico');
+                throw new Error('No detector loaded');
+            }
+
+            // Configure Detector
+            if (loadedModel === 'ssd') {
+                window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
+            } else {
+                window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: isMobile ? 320 : 512, scoreThreshold: 0.3 });
+            }
+            state.detectorType = loadedModel;
+
+            // --- STAGE 2: RECOGNITION ---
+            const recogFiles = [
+                'face_landmark_68_model-weights_manifest.json', 'face_landmark_68_model-shard1',
+                'face_recognition_model-weights_manifest.json', 'face_recognition_model-shard1', 'face_recognition_model-shard2'
+            ];
+
+            updateModelStatus('rec', 0, 'Pendiente...');
+            state.recognitionReady = false;
+
+            for (const modelUrl of modelUrls) {
+                try {
+                    await prefetchFiles(modelUrl, recogFiles, (pct, text) => updateModelStatus('rec', pct, text));
+
+                    await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                    await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+
+                    state.recognitionReady = true;
+                    updateModelStatus('rec', 100, 'Reconocimiento Listo');
+                    break;
+                } catch (e) {
+                    console.warn('Recog fallback', e);
+                }
+            }
+
+            if (!state.recognitionReady) {
+                updateModelStatus('rec', 0, 'No Disponible');
+            }
+
+            // Finalize
+            state.modelReady = true;
+            document.getElementById('mainStatusText').innerText = 'IA Lista';
+            updateAIStatus(true);
+
+            // Hide overlay after delay
+            setTimeout(() => {
+                const aiStatus = document.getElementById('aiStatus');
+                // Optional
+            }, 3000);
         }
 
         function updateAIStatus(ready) {
