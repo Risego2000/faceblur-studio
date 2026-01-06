@@ -1626,6 +1626,14 @@
                                 <span id="paddingVal">10%</span>
                             </div>
 
+                            <div class="overlay-slider-row">
+                                <span>Audio</span>
+                                <button id="audioToggleBtn" class="overlay-btn active"
+                                    style="margin-left: auto; width: 60px;">
+                                    🔊 Si
+                                </button>
+                            </div>
+
                             <!-- Action Buttons (New) -->
                             <div class="overlay-actions" style="display: flex; gap: 8px; margin-top: 4px;">
                                 <button class="action-btn" id="processBtn" disabled
@@ -1697,6 +1705,7 @@
             effect: 'pixelate',
             intensity: 15,
             padding: 0.1, // 10% por defecto
+            includeAudio: true,
             detectionMode: 'all',
             previewMode: 'effects', // ALWAYS effects
             processedBlob: null,
@@ -2134,6 +2143,21 @@
                 elements.paddingVal.textContent = val + '%';
                 renderFrame();
             });
+
+            // Audio toggle
+            const audioBtn = document.getElementById('audioToggleBtn');
+            if (audioBtn) {
+                audioBtn.addEventListener('click', () => {
+                    state.includeAudio = !state.includeAudio;
+                    if (state.includeAudio) {
+                        audioBtn.classList.add('active');
+                        audioBtn.textContent = '🔊 Si';
+                    } else {
+                        audioBtn.classList.remove('active');
+                        audioBtn.textContent = '🔇 No';
+                    }
+                });
+            }
 
             // Preview toggle removed - always effects
             // const previewOriginal = document.getElementById('previewOriginal');
@@ -2749,6 +2773,10 @@
             elements.modalTitle.textContent = 'Procesando Video';
             elements.modalSubtitle.textContent = 'Analizando frames con alta precisión...';
 
+            // Show cancel button directly
+            elements.cancelBtn.style.display = 'block';
+            elements.cancelBtn.textContent = 'Cancelar';
+
             const duration = video.duration;
             // Estimar FPS o usar 30 por defecto. Face-API funciona mejor con un ritmo constante.
             const fps = 30;
@@ -2788,6 +2816,7 @@
                     state.isProcessing = false;
                     elements.processBtn.disabled = false;
                     elements.modal.classList.remove('active');
+                    console.log('Procesamiento cancelado por el usuario');
                     return;
                 }
 
@@ -2910,34 +2939,35 @@
             // 0 indica que capturamos frames manualmente vía requestFrame()
             const stream = canvas.captureStream(0);
 
-            // Intentar capturar audio del video original
-            // Intentar capturar audio del video original usando Web Audio API (Más robusto para móviles)
-            try {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    const audioCtx = new AudioContext();
-                    const source = audioCtx.createMediaElementSource(video);
-                    const dest = audioCtx.createMediaStreamDestination();
-                    source.connect(dest);
+            // Intentar capturar audio del video original si está habilitado
+            if (state.includeAudio) {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const audioCtx = new AudioContext();
+                        const source = audioCtx.createMediaElementSource(video);
+                        const dest = audioCtx.createMediaStreamDestination();
+                        source.connect(dest);
 
-                    const audioTracks = dest.stream.getAudioTracks();
-                    if (audioTracks.length > 0) {
-                        stream.addTrack(audioTracks[0]);
-                        console.log('Audio track added via WebAudio API');
-                    }
-                } else {
-                    // Fallback para navegadores antiguos
-                    let audioStream;
-                    if (video.captureStream) audioStream = video.captureStream();
-                    else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
+                        const audioTracks = dest.stream.getAudioTracks();
+                        if (audioTracks.length > 0) {
+                            stream.addTrack(audioTracks[0]);
+                            console.log('Audio track added via WebAudio API');
+                        }
+                    } else {
+                        // Fallback para navegadores antiguos
+                        let audioStream;
+                        if (video.captureStream) audioStream = video.captureStream();
+                        else if (video.mozCaptureStream) audioStream = video.mozCaptureStream();
 
-                    if (audioStream) {
-                        const audioTracks = audioStream.getAudioTracks();
-                        if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
+                        if (audioStream) {
+                            const audioTracks = audioStream.getAudioTracks();
+                            if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
+                        }
                     }
+                } catch (e) {
+                    console.warn('Could not capture audio:', e);
                 }
-            } catch (e) {
-                console.warn('Could not capture audio:', e);
             }
 
             let mimeType = 'video/webm;codecs=vp9,opus';
@@ -2955,6 +2985,9 @@
             };
 
             recorder.onstop = () => {
+                console.log('Recorder stopped successfully');
+                video.pause();
+                video.muted = true; // Restore mute
                 state.processedBlob = new Blob(chunks, { type: 'video/webm' });
                 state.isProcessing = false;
 
@@ -2966,7 +2999,7 @@
                 elements.modalFill.parentElement.style.display = 'none';
                 elements.modalPercent.style.display = 'none';
                 document.querySelector('.modal-spinner').style.display = 'none';
-                document.getElementById('cancelBtn').textContent = 'Cerrar';
+                elements.cancelBtn.textContent = 'Cerrar';
 
                 // Show Actions
                 const actions = document.getElementById('modalActions');
@@ -3018,11 +3051,23 @@
             const frameDuration = 1000 / fps; // Duración exacta de cada frame en ms
 
             function drawNext() {
+                // Check cancellation during compilation
+                if (state.processingCanceled) {
+                    if (recorder.state === 'recording') recorder.stop();
+                    return;
+                }
+
                 if (frameIndex >= frames.length) {
+                    // Update UI to 100% explicitly
+                    elements.modalSubtitle.textContent = 'Finalizando... 100%';
+                    elements.modalFill.style.width = '100%';
+
+                    // Give a small buffer for the last frame to encode
                     setTimeout(() => {
-                        if (recorder.state === 'recording') recorder.stop();
-                        video.pause();
-                        video.muted = true;
+                        if (recorder.state === 'recording') {
+                            recorder.stop();
+                            console.log('Recorder stop requested');
+                        }
                     }, 500);
                     return;
                 }
