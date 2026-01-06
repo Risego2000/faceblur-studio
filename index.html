@@ -1909,14 +1909,10 @@
             elements.rewindBtn.addEventListener('click', () => {
                 video.currentTime = Math.max(0, video.currentTime - 1);
                 updateProgress();
-                // Forzar actualización inmediata si está pausado
-                if (video.paused) applyEffects();
             });
             elements.forwardBtn.addEventListener('click', () => {
                 video.currentTime = Math.min(video.duration, video.currentTime + 1);
                 updateProgress();
-                // Forzar actualización inmediata si está pausado
-                if (video.paused) applyEffects();
             });
 
             // Intensity
@@ -2507,6 +2503,13 @@
         // Apply effects (used mainly for paused/immediate updates)
         async function applyEffects() {
             if (isDetecting || !state.modelReady) return;
+
+            // 1. Draw Updated Video Frame First!
+            if (state.videoWidth) {
+                elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+            }
+
+            // 2. Detect & Draw
             await runBackgroundDetection();
             drawCachedEffects();
         }
