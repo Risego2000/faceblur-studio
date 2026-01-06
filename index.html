@@ -2246,7 +2246,14 @@
 
             if (ready) {
                 dot.classList.add('ready');
-                const modelName = state.detectorType === 'ssd' ? 'SSD Precision' : 'Tiny Fast';
+                const modelNames = {
+                    'ssd': 'SSD Precision',
+                    'tiny': 'Tiny Fast',
+                    'blazeface': 'BlazeFace',
+                    'faceboxes': 'FaceBoxes',
+                    'retinaface': 'RetinaFace'
+                };
+                const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
                 span.textContent = `IA Lista (${modelName})`;
                 // Hide progress bar when ready
                 if (progress) progress.classList.remove('active');
