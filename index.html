@@ -1480,9 +1480,9 @@
                 </div>
 
                 <div class="video-controls">
-                    <button class="ctrl-btn" id="rewindBtn" title="Atrás 10s">−10s</button>
+                    <button class="ctrl-btn" id="rewindBtn" title="Atrás 1s">−1s</button>
                     <button class="play-btn" id="playBtn">▶</button>
-                    <button class="ctrl-btn" id="forwardBtn" title="Adelante 10s">+10s</button>
+                    <button class="ctrl-btn" id="forwardBtn" title="Adelante 1s">+1s</button>
                     <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
                     <div class="progress-track" id="progressTrack">
                         <div class="progress-fill" id="progressFill"></div>
@@ -1905,11 +1905,11 @@
             elements.playBtn.addEventListener('click', togglePlay);
             elements.progressTrack.addEventListener('click', seek);
             elements.rewindBtn.addEventListener('click', () => {
-                video.currentTime = Math.max(0, video.currentTime - 10);
+                video.currentTime = Math.max(0, video.currentTime - 1);
                 updateProgress();
             });
             elements.forwardBtn.addEventListener('click', () => {
-                video.currentTime = Math.min(video.duration, video.currentTime + 10);
+                video.currentTime = Math.min(video.duration, video.currentTime + 1);
                 updateProgress();
             });
 
