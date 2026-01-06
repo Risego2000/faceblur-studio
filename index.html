@@ -2004,19 +2004,29 @@
                     updateModelStatus('det', 30, 'Cargando YOLO...');
                     if (typeof ort !== 'undefined') {
                         try {
-                            // Using YOLOv8-face model (lightweight version)
-                            const modelUrl = 'https://huggingface.co/arnabdhar/YOLOv8-Face-Detection/resolve/main/yolov8n-face.onnx';
+                            // Using a lighter YOLOv5 face model instead
+                            // This is more reliable and faster to download
+                            const modelUrl = 'https://cdn.jsdelivr.net/gh/onnx/models@main/vision/body_analysis/ultraface/models/version-RFB-320.onnx';
 
                             updateModelStatus('det', 50, 'Descargando YOLO...');
-                            window.yoloSession = await ort.InferenceSession.create(modelUrl, {
-                                executionProviders: ['webgl', 'wasm']
+
+                            // Set timeout for model loading
+                            const loadPromise = ort.InferenceSession.create(modelUrl, {
+                                executionProviders: ['webgl', 'wasm'],
+                                graphOptimizationLevel: 'all'
                             });
+
+                            const timeoutPromise = new Promise((_, reject) =>
+                                setTimeout(() => reject(new Error('Timeout: Modelo muy pesado')), 15000)
+                            );
+
+                            window.yoloSession = await Promise.race([loadPromise, timeoutPromise]);
 
                             loadedModel = 'yolo';
                             updateModelStatus('det', 100, 'YOLO Listo');
                         } catch (e) {
                             console.error('YOLO load error:', e);
-                            throw new Error('YOLO: Error de carga - ' + e.message);
+                            throw new Error('YOLO: ' + (e.message || 'Error de carga'));
                         }
                     } else {
                         throw new Error('YOLO: ONNX Runtime no disponible');
@@ -2761,47 +2771,58 @@
                         identity: null
                     }));
                 } else if (state.detectorType === 'yolo' && window.yoloSession) {
-                    // YOLO Face Detection
+                    // UltraFace Detection (ONNX)
                     const canvas = document.createElement('canvas');
-                    canvas.width = 640;
-                    canvas.height = 640;
+                    canvas.width = 320;
+                    canvas.height = 240;
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, 640, 640);
+                    ctx.drawImage(video, 0, 0, 320, 240);
 
-                    const imageData = ctx.getImageData(0, 0, 640, 640);
-                    const input = new Float32Array(3 * 640 * 640);
+                    const imageData = ctx.getImageData(0, 0, 320, 240);
+                    const input = new Float32Array(3 * 320 * 240);
 
-                    // Normalize and transpose
-                    for (let i = 0; i < 640 * 640; i++) {
-                        input[i] = imageData.data[i * 4] / 255.0;
-                        input[640 * 640 + i] = imageData.data[i * 4 + 1] / 255.0;
-                        input[2 * 640 * 640 + i] = imageData.data[i * 4 + 2] / 255.0;
+                    // Normalize and transpose (CHW format)
+                    for (let i = 0; i < 320 * 240; i++) {
+                        input[i] = (imageData.data[i * 4] - 127) / 128.0;
+                        input[320 * 240 + i] = (imageData.data[i * 4 + 1] - 127) / 128.0;
+                        input[2 * 320 * 240 + i] = (imageData.data[i * 4 + 2] - 127) / 128.0;
                     }
 
-                    const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
-                    const outputs = await window.yoloSession.run({ images: tensor });
-                    const output = outputs.output0.data;
+                    const tensor = new ort.Tensor('float32', input, [1, 3, 240, 320]);
+                    const outputs = await window.yoloSession.run({ input: tensor });
 
-                    // Parse YOLO output (simplified)
+                    // UltraFace outputs: boxes and scores
+                    const boxes = outputs.boxes ? outputs.boxes.data : (outputs.output ? outputs.output.data : []);
+                    const scores = outputs.scores ? outputs.scores.data : [];
+
                     detections = [];
-                    const scaleX = video.videoWidth / 640;
-                    const scaleY = video.videoHeight / 640;
+                    const scaleX = video.videoWidth / 320;
+                    const scaleY = video.videoHeight / 240;
 
-                    for (let i = 0; i < output.length / 6; i++) {
-                        const confidence = output[i * 6 + 4];
-                        if (confidence > 0.5) {
-                            const x = output[i * 6] * scaleX;
-                            const y = output[i * 6 + 1] * scaleY;
-                            const w = output[i * 6 + 2] * scaleX;
-                            const h = output[i * 6 + 3] * scaleY;
+                    // Parse detections (format varies by model)
+                    if (boxes.length > 0) {
+                        const numDetections = Math.floor(boxes.length / 4);
+                        for (let i = 0; i < numDetections; i++) {
+                            const score = scores[i] || 0.9;
+                            if (score > 0.7) {
+                                const x1 = boxes[i * 4] * scaleX;
+                                const y1 = boxes[i * 4 + 1] * scaleY;
+                                const x2 = boxes[i * 4 + 2] * scaleX;
+                                const y2 = boxes[i * 4 + 3] * scaleY;
 
-                            detections.push({
-                                detection: {
-                                    box: { x: x - w / 2, y: y - h / 2, width: w, height: h },
-                                    score: confidence
-                                },
-                                identity: null
-                            });
+                                detections.push({
+                                    detection: {
+                                        box: {
+                                            x: x1,
+                                            y: y1,
+                                            width: x2 - x1,
+                                            height: y2 - y1
+                                        },
+                                        score: score
+                                    },
+                                    identity: null
+                                });
+                            }
                         }
                     }
                 } else if (!state.recognitionReady) {
