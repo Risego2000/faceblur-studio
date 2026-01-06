@@ -1296,7 +1296,7 @@
 <body>
     <header>
         <div class="logo">
-            <button class="menu-toggle" id="menuToggle">☰</button>
+            <button class="menu-toggle" id="menuToggle" style="display: none !important;">☰</button>
             <div class="logo-icon">🎭</div>
             <h1>FaceAnon <span
                     style="font-size: 10px; background: var(--primary) !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; background-clip: initial !important; -webkit-background-clip: initial !important; padding: 2px 6px; border-radius: 4px; vertical-align: middle; margin-left: 4px; font-weight: 800; display: inline-block; line-height: 1; opacity: 1 !important; visibility: visible !important;">PRO</span>
@@ -1305,40 +1305,7 @@
     </header>
 
     <div class="app">
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <button class="btn btn-primary" id="newBtn" style="margin-bottom: 0;">📁 Nuevo Video</button>
-            </div>
 
-
-
-
-
-            <!-- Parameters moved to overlay -->
-
-
-            <div class="sidebar-section">
-                <div class="section-title">Preview</div>
-                <div class="preview-toggle">
-                    <button class="preview-btn active" id="previewOriginal">Original</button>
-                    <button class="preview-btn" id="previewEffects">Con Efectos</button>
-                </div>
-            </div>
-
-            <div class="sidebar-section" style="margin-bottom: 0;">
-                <button class="btn btn-primary" id="processBtn" disabled style="margin-bottom: 8px;">
-                    ⚡ Procesar Video
-                </button>
-                <button class="btn btn-secondary" id="exportBtn" disabled style="width: 100%;">💾 Guardar</button>
-                <div
-                    style="margin-top: 24px; text-align: center; border-top: 1px solid var(--border); padding-top: 16px;">
-                    <p
-                        style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700;">
-                        FaceAnon Pro v2.0
-                    </p>
-                </div>
-            </div>
-        </aside>
 
         <main class="workspace">
             <div class="upload-area" id="uploadArea">
@@ -1419,21 +1386,47 @@
                                     value="10">
                                 <span id="paddingVal">10%</span>
                             </div>
-                        </div>
-                    </div>
 
-                    <div class="video-controls">
-                        <button class="ctrl-btn" id="rewindBtn" title="Atrás 10s">−10s</button>
-                        <button class="play-btn" id="playBtn">▶</button>
-                        <button class="ctrl-btn" id="forwardBtn" title="Adelante 10s">+10s</button>
-                        <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
-                        <div class="progress-track" id="progressTrack">
-                            <div class="progress-fill" id="progressFill"></div>
+                            <!-- Preview Toggles (New) -->
+                            <div class="overlay-controls" id="previewToggle"
+                                style="justify-content: center; margin-top: 4px;">
+                                <button class="overlay-btn active" id="previewOriginal">Original</button>
+                                <button class="overlay-btn" id="previewEffects">Con Efectos</button>
+                            </div>
+
+                            <!-- Action Buttons (New) -->
+                            <div class="overlay-actions" style="display: flex; gap: 8px; margin-top: 4px;">
+                                <button class="action-btn" id="processBtn" disabled
+                                    style="flex: 1; background: var(--primary); color: white; padding: 6px; border-radius: 8px; font-size: 11px; font-weight: 600; border: none; cursor: pointer;">
+                                    ⚡ Procesar
+                                </button>
+                                <button class="action-btn" id="exportBtn" disabled
+                                    style="flex: 1; background: var(--bg-hover); color: white; padding: 6px; border-radius: 8px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); cursor: pointer;">
+                                    💾 Guardar
+                                </button>
+                            </div>
+
+                            <!-- New Video (Moved from Sidebar) -->
+                            <button id="newBtn"
+                                style="width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); padding: 4px; border-radius: 8px; font-size: 10px; cursor: pointer; margin-top: 4px;">
+                                📁 Abrir Otro Video
+                            </button>
                         </div>
                     </div>
                 </div>
+
+                <div class="video-controls">
+                    <button class="ctrl-btn" id="rewindBtn" title="Atrás 10s">−10s</button>
+                    <button class="play-btn" id="playBtn">▶</button>
+                    <button class="ctrl-btn" id="forwardBtn" title="Adelante 10s">+10s</button>
+                    <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+                    <div class="progress-track" id="progressTrack">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
             </div>
-        </main>
+    </div>
+    </main>
     </div>
 
     <input type="file" id="fileInput" accept="video/*">
