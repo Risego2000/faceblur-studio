@@ -1358,9 +1358,10 @@
                         minConfidence: 0.35 // Mayor sensibilidad para detectar caras de inmediato
                     });
                 } else {
+                    // Optimized for mobile devices
                     window.faceDetector = new faceapi.TinyFaceDetectorOptions({
-                        inputSize: 512, // Mayor resolución de entrada para caras pequeñas/lejanas
-                        scoreThreshold: 0.25 // Más sensible a detecciones iniciales
+                        inputSize: isMobile ? 416 : 512, // Reduced input size on mobile for speed
+                        scoreThreshold: isMobile ? 0.3 : 0.25 // Slightly higher threshold on mobile for accuracy
                     });
                 }
 
@@ -1674,8 +1675,19 @@
         }
 
         let isDetecting = false;
+        let lastDetectionTime = 0;
+        const DETECTION_INTERVAL = isMobile ? 150 : 100; // Throttle detection on mobile (ms)
+
         async function runBackgroundDetection() {
             if (isDetecting || !state.modelReady) return;
+
+            // Throttle detection on mobile for better performance
+            const now = Date.now();
+            if (isMobile && now - lastDetectionTime < DETECTION_INTERVAL) {
+                return;
+            }
+            lastDetectionTime = now;
+
             isDetecting = true;
             try {
                 let detections = await faceapi.detectAllFaces(video, window.faceDetector)
@@ -1692,7 +1704,7 @@
 
                 if (refined.length > 0) {
                     state.lastKnownFaces = filterFaces(refined);
-                    state.previewPersistenceCount = 10; // Mantener 10 frames de margen
+                    state.previewPersistenceCount = isMobile ? 8 : 10; // Shorter persistence on mobile
                 } else if (state.previewPersistenceCount > 0) {
                     state.previewPersistenceCount--;
                     // Mantener las caras actuales
@@ -1707,7 +1719,7 @@
         }
 
         // EMA Smoothing logic to eliminate jitter for exact tracking
-        const SMOOTHING_FACTOR = 0.8; // Aumentado para seguir el rostro casi instantáneamente
+        const SMOOTHING_FACTOR = isMobile ? 0.7 : 0.8; // Slightly more smoothing on mobile for stability
         function smoothBoundingBox(detection) {
             const rawBox = detection.detection.box;
             const personId = detection.identity ? detection.identity.id : 'unknown';
