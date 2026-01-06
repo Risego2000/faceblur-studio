@@ -1790,12 +1790,21 @@
                 console.log(`Video loaded: ${state.videoWidth}x${state.videoHeight}`);
 
                 if (elements.videoContainer) elements.videoContainer.classList.add('active');
+
+                // Force multiple renders to ensure frame is captured
+                const forceRender = () => {
+                    if (typeof renderFrame === 'function') renderFrame();
+                };
+
+                requestAnimationFrame(forceRender);
+                setTimeout(forceRender, 100);
+                setTimeout(forceRender, 500);
+
                 setTimeout(() => {
                     if (elements.videoLoader) elements.videoLoader.classList.remove('active');
-                }, 500);
+                }, 600);
 
                 if (typeof updateTimeDisplay === 'function') updateTimeDisplay();
-                if (typeof renderFrame === 'function') renderFrame();
 
                 if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
             };
