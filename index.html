@@ -1832,84 +1832,86 @@
         }
 
         function loadVideo(file) {
-            // Validate type
             if (file.type.indexOf('video') === -1) {
                 alert('Por favor selecciona un archivo de video válido.');
                 return;
             }
 
-            // Show loader
             if (elements.uploadArea) elements.uploadArea.style.display = 'none';
             if (elements.videoLoader) elements.videoLoader.classList.add('active');
 
-            // Reset App
             if (typeof resetAppState === 'function') resetAppState();
 
-            // Load
             const url = URL.createObjectURL(file);
             state.videoBlobUrl = url;
 
-            video.onloadeddata = () => {
+            // PREPARE EVENTS BEFORE SOURCE
+            video.onloadedmetadata = () => {
                 state.videoWidth = video.videoWidth;
                 state.videoHeight = video.videoHeight;
+                console.log(`Metadata loaded: ${state.videoWidth}x${state.videoHeight}`);
 
+                // Update canvas dimensions immediately
                 if (elements.renderCanvas) {
                     elements.renderCanvas.width = state.videoWidth;
                     elements.renderCanvas.height = state.videoHeight;
                 }
                 processCanvas.width = state.videoWidth;
                 processCanvas.height = state.videoHeight;
-
-                console.log(`Video loaded: ${state.videoWidth}x${state.videoHeight}`);
-
                 if (elements.videoContainer) elements.videoContainer.classList.add('active');
+            };
 
-                // Force multiple renders to ensure frame is captured
-                const forceRender = () => {
-                    if (typeof renderFrame === 'function') renderFrame();
+            video.oncanplay = () => {
+                console.log('Video can play - starting render watchdog');
+
+                // Watchdog: Force render multiple times as mobile decoders can be lazy
+                let attempts = 30; // Try for ~4.5 seconds
+                const watchdog = () => {
+                    if (attempts <= 0) {
+                        if (elements.videoLoader) elements.videoLoader.classList.remove('active');
+                        return;
+                    }
+                    if (state.videoWidth > 0) {
+                        if (typeof renderFrame === 'function') renderFrame();
+                    }
+                    attempts--;
+                    setTimeout(watchdog, 150);
                 };
-
-                requestAnimationFrame(forceRender);
-                setTimeout(forceRender, 100);
-                setTimeout(forceRender, 500);
-
-                setTimeout(() => {
-                    if (elements.videoLoader) elements.videoLoader.classList.remove('active');
-                }, 600);
+                watchdog();
 
                 if (typeof updateTimeDisplay === 'function') updateTimeDisplay();
-
                 if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
             };
-
-            video.src = url;
-            video.muted = true; // Essential for auto-loading on some mobiles
-            video.playsInline = true;
-
-            // Mobile Strategy: Force play to start decoding, then pause immediately
-            // This is the most reliable way to get the first frame on iOS/Android
-            const onPlaying = () => {
-                video.pause();
-                video.currentTime = 0;
-                // Force initial render
-                if (typeof renderFrame === 'function') renderFrame();
-            };
-            video.addEventListener('playing', onPlaying, { once: true });
-
-            const playPromise = video.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.warn("Auto-play prevented (expected on some mobiles):", error);
-                    // Fallback if play() fails: just load()
-                    // video.load() is implicit when setting src, but ensuring it helps
-                });
-            }
 
             video.onerror = () => {
                 alert('Error al cargar el video.');
                 if (elements.uploadArea) elements.uploadArea.style.display = 'block';
                 if (elements.videoLoader) elements.videoLoader.classList.remove('active');
             };
+
+            // Set source and attributes
+            video.src = url;
+            video.muted = true;
+            video.playsInline = true;
+            video.load();
+
+            // iOS/Mobile Kickstart: The "Play-Pause" dance
+            const kickstart = async () => {
+                try {
+                    await video.play();
+                    // Some browsers need a tiny bit of playback to actually decode a frame for canvas
+                    setTimeout(() => {
+                        video.pause();
+                        video.currentTime = 0;
+                        if (typeof renderFrame === 'function') renderFrame();
+                    }, 100);
+                } catch (e) {
+                    console.warn("Kickstart play failed:", e);
+                }
+            };
+
+            // Try kickstart on multiple events to be safe
+            video.addEventListener('loadeddata', kickstart, { once: true });
         }
 
         // Event Listeners
