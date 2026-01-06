@@ -1635,7 +1635,8 @@
                         </button>
 
                         <!-- Model Selection -->
-                        <div style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">IA</div>
+                        <div style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">Modelo de
+                            Inteligencia Artificial de Detección de Rostros:</div>
                         <div class="overlay-controls" id="modelSelection"
                             style="flex-wrap: wrap; justify-content: center;">
                             <button class="overlay-btn active" data-model="auto">Auto</button>
@@ -1683,30 +1684,35 @@
 
                         <!-- Parameters (Moved from Sidebar) -->
                         <div class="overlay-params">
-                            <div style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">Efecto</div>
+                            <div style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px;">Efecto:
+                            </div>
                             <div class="overlay-controls" id="effectSelection" style="justify-content: center;">
                                 <button class="overlay-btn active" data-effect="pixelate">Pixel</button>
                                 <button class="overlay-btn" data-effect="blur">Blur</button>
                                 <button class="overlay-btn" data-effect="solid">Solid</button>
                             </div>
 
+                            <div
+                                style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px; margin-top: 8px;">
+                                Intensidad:</div>
                             <div class="overlay-slider-row">
-                                <span>Intensidad</span>
-                                <input type="range" class="overlay-slider" id="intensity" min="5" max="50" value="15">
+                                <input type="range" class="overlay-slider" id="intensity" min="5" max="50" value="15"
+                                    style="flex: 1;">
                                 <span id="intensityVal">15</span>
                             </div>
+                            <div
+                                style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px; margin-top: 8px;">
+                                Margen:</div>
                             <div class="overlay-slider-row">
-                                <span>Margen</span>
                                 <input type="range" class="overlay-slider" id="paddingSlider" min="0" max="100"
-                                    value="10">
+                                    value="10" style="flex: 1;">
                                 <span id="paddingVal">10%</span>
                             </div>
 
                             <!-- Trim Controls - Dual Range Slider -->
-                            <div class="overlay-slider-row"
-                                style="margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
-                                <span>Rango de Tiempo:</span>
-                            </div>
+                            <div
+                                style="font-size: 10px; color: rgba(255,255,255,0.8); margin-bottom: 4px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+                                Rango de Tiempo:</div>
                             <div style="position: relative; padding: 0 8px; margin: 8px 0;">
                                 <!-- Track background -->
                                 <div
