@@ -1658,13 +1658,15 @@
                 // 1. Draw original video
                 elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
-                // 2. Continuous Background Detection
+                // 2. Continuous Background Detection (async, doesn't block rendering)
                 if (state.isPlaying && !state.isProcessing) {
                     runBackgroundDetection();
                 }
 
-                // 3. Draw layers
+                // 3. ALWAYS draw effects if we have cached faces and we're in effects mode
+                // This ensures NO frames are skipped, even while detection is running
                 if (state.previewMode === 'effects' && !state.isProcessing) {
+                    // Always draw effects using last known detections
                     drawCachedEffects(); // Draw everything (effects + highlights)
                 } else if (state.previewMode === 'original' && !state.isProcessing) {
                     drawTrackingBorders(); // Draw only diagnostic borders
@@ -1704,11 +1706,13 @@
 
                 if (refined.length > 0) {
                     state.lastKnownFaces = filterFaces(refined);
-                    state.previewPersistenceCount = isMobile ? 8 : 10; // Shorter persistence on mobile
+                    // Much longer persistence on mobile to prevent gaps
+                    state.previewPersistenceCount = isMobile ? 30 : 20;
                 } else if (state.previewPersistenceCount > 0) {
                     state.previewPersistenceCount--;
-                    // Mantener las caras actuales
+                    // Keep using cached faces - this prevents frame gaps
                 } else {
+                    // Only clear faces after persistence expires
                     state.lastKnownFaces = [];
                 }
             } catch (e) {
