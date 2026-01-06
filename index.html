@@ -2058,7 +2058,9 @@
             elements.exportBtn.disabled = true;
 
             // Clear people list
-            elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+            if (elements.peopleList) {
+                elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+            }
 
             // Reset preview buttons
             const previewOriginal = document.getElementById('previewOriginal');
