@@ -1839,8 +1839,7 @@
 
             // Load
             const url = URL.createObjectURL(file);
-            video.src = url;
-            video.load();
+            state.videoBlobUrl = url;
 
             video.onloadeddata = () => {
                 state.videoWidth = video.videoWidth;
@@ -1874,6 +1873,9 @@
 
                 if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
             };
+
+            video.src = url;
+            video.load();
 
             video.onerror = () => {
                 alert('Error al cargar el video.');
