@@ -1996,6 +1996,14 @@
             // Time update
             video.addEventListener('timeupdate', updateProgress);
 
+            // Video ended - Stop detection loop
+            video.addEventListener('ended', () => {
+                state.isPlaying = false;
+                elements.playBtn.textContent = '▶';
+                stopPreviewLoop();
+                console.log('Video ended: Stopped detection loop');
+            });
+
             // Mobile Menu
             if (elements.menuToggle) {
                 elements.menuToggle.addEventListener('click', () => {
