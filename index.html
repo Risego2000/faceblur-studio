@@ -3317,6 +3317,7 @@
 
         // Main Process Function - Two Pass System (Analyze -> Render)
         // Main Process Function - Two Pass System (Analyze -> Render)
+        // Main Process Function - Two Pass System (Analyze -> Render)
         async function processVideo() {
             // Safety: If processing flag is stuck but UI shows we are idle, reset it
             if (state.isProcessing && !elements.modal.classList.contains('active')) {
@@ -3345,572 +3346,576 @@
                 elements.cancelBtn.onclick = () => {
                     console.log('User requested cancellation');
                     state.processingCanceled = true;
-                    // We don't immediately hide modal here, we let the loop break handle it
-                    // OPTIMIZED MEMORY FLOW: 
-                    // Phase 1: Blocked Analysis (Safe for RAM)
-                    // Phase 2: Continuous Rendering (Safe for Fluidity)
+                };
 
-                    // PHASE 1: BLOCK ANALYSIS
-                    // We analyze in small time chunks to allow Garbage Collection (GC) to clear complex Tensors
-                    // But we accumulate the lightweight coordinate data for a single fluid render pass later.
-                    const CHUNK_DURATION = 2.0; // 2 seconds per analysis block (Very safe)
-                    let currentAnalysisTime = startTime;
+                const startTime = state.trimStart || 0;
+                const endTime = state.trimEnd || video.duration;
 
-                    elements.modalSubtitle.textContent = 'Fase 1/2: Analizando...';
-                    analysisData = [];
+                // OPTIMIZED MEMORY FLOW: 
+                // Phase 1: Blocked Analysis (Safe for RAM)
+                // Phase 2: Continuous Rendering (Safe for Fluidity)
 
-                    while (currentAnalysisTime < endTime) {
-                        if (state.processingCanceled) break;
+                // PHASE 1: BLOCK ANALYSIS
+                // We analyze in small time chunks to allow Garbage Collection (GC) to clear complex Tensors
+                // But we accumulate the lightweight coordinate data for a single fluid render pass later.
+                const CHUNK_DURATION = 2.0; // 2 seconds per analysis block (Very safe)
+                let currentAnalysisTime = startTime;
 
-                        const blockEnd = Math.min(endTime, currentAnalysisTime + CHUNK_DURATION);
+                elements.modalSubtitle.textContent = 'Fase 1/2: Analizando...';
+                analysisData = [];
 
-                        // Update UI
-                        elements.modalSubtitle.textContent = `Fase 1/2: Analizando ${formatTime(currentAnalysisTime)}...`;
+                while (currentAnalysisTime < endTime) {
+                    if (state.processingCanceled) break;
 
-                        // Run Analysis for this block
-                        const blockData = await analyzeVideoPass(currentAnalysisTime, blockEnd);
-                        analysisData.push(...blockData);
+                    const blockEnd = Math.min(endTime, currentAnalysisTime + CHUNK_DURATION);
 
-                        // Update Global Progress (0-50%)
-                        const pct = ((currentAnalysisTime - startTime) / (endTime - startTime)) * 50;
-                        elements.modalFill.style.width = Math.min(50, pct) + '%';
-                        elements.modalPercent.textContent = Math.round(Math.min(50, pct)) + '%';
+                    // Update UI
+                    elements.modalSubtitle.textContent = `Fase 1/2: Analizando ${formatTime(currentAnalysisTime)}...`;
 
-                        // Advance
-                        currentAnalysisTime = blockEnd;
+                    // Run Analysis for this block
+                    const blockData = await analyzeVideoPass(currentAnalysisTime, blockEnd);
+                    analysisData.push(...blockData);
 
-                        // FORCE GC PAUSE: Critical for mobile stability
-                        // Yield to main thread to let browser clean up TFJS tensors
-                        await new Promise(r => setTimeout(r, 50));
-                    }
+                    // Update Global Progress (0-50%)
+                    const pct = ((currentAnalysisTime - startTime) / (endTime - startTime)) * 50;
+                    elements.modalFill.style.width = Math.min(50, pct) + '%';
+                    elements.modalPercent.textContent = Math.round(Math.min(50, pct)) + '%';
 
-                    if (state.processingCanceled) throw new Error('Cancelado por usuario');
+                    // Advance
+                    currentAnalysisTime = blockEnd;
 
-                    // PHASE 2: CONTINUOUS RENDERING
-                    // We render in one go to ensure perfect fluid video with no cuts.
-                    elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
-                    elements.modalFill.style.width = '50%';
-                    elements.modalPercent.textContent = '50%';
+                    // FORCE GC PAUSE: Critical for mobile stability
+                    // Yield to main thread to let browser clean up TFJS tensors
+                    await new Promise(r => setTimeout(r, 50));
+                }
 
-                    await renderVideoPass(startTime, endTime);
+                if (state.processingCanceled) throw new Error('Cancelado por usuario');
 
-                    // Clear memory
-                    analysisData = [];
+                // PHASE 2: CONTINUOUS RENDERING
+                // We render in one go to ensure perfect fluid video with no cuts.
+                elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
+                elements.modalFill.style.width = '50%';
+                elements.modalPercent.textContent = '50%';
 
-                    // FINAL UI UPDATE
-                    if (state.processedBlob && state.processedBlob.size > 0) {
-                        showExportSuccess();
-                    } else if (!state.processingCanceled) {
-                        throw new Error('El video generado falló o está vacío.');
-                    }
+                await renderVideoPass(startTime, endTime);
 
-                } catch (e) {
-                    console.error('Processing error:', e);
-                    state.isProcessing = false;
+                // Clear memory
+                analysisData = [];
 
-                    // Cleanup
-                    analysisData = [];
+                // FINAL UI UPDATE
+                if (state.processedBlob && state.processedBlob.size > 0) {
+                    showExportSuccess();
+                } else if (!state.processingCanceled) {
+                    throw new Error('El video generado falló o está vacío.');
+                }
 
-                    if (e.message === 'Cancelado por usuario' || state.processingCanceled) {
-                        elements.modal.classList.remove('active');
-                        video.pause();
-                    } else {
-                        elements.modalTitle.textContent = 'Error';
-                        elements.modalSubtitle.textContent = e.message;
-                        elements.processBtn.disabled = false;
-                        elements.cancelBtn.textContent = 'Cerrar';
-                        elements.cancelBtn.onclick = () => elements.modal.classList.remove('active');
-                    }
+            } catch (e) {
+                console.error('Processing error:', e);
+                state.isProcessing = false;
+
+                // Cleanup
+                analysisData = [];
+
+                if (e.message === 'Cancelado por usuario' || state.processingCanceled) {
+                    elements.modal.classList.remove('active');
+                    video.pause();
+                } else {
+                    elements.modalTitle.textContent = 'Error';
+                    elements.modalSubtitle.textContent = e.message;
+                    elements.processBtn.disabled = false;
+                    elements.cancelBtn.textContent = 'Cerrar';
+                    elements.cancelBtn.onclick = () => elements.modal.classList.remove('active');
                 }
             }
+        }
 
         // Phase 1: Analyze and store light-weight coordinates
         async function analyzeVideoPass(startTime, endTime) {
-                const data = [];
-                const duration = endTime - startTime;
-                // SPEED OPTIMIZATION: Detection doesn't need to run at 30fps.
-                // Running at 10-15fps is enough for tracking and 3x faster.
-                const analysisFps = isMobile ? 8 : 12;
-                const frameTime = 1 / analysisFps;
-                const videoFps = 30;
-                const videoFrameTime = 1 / videoFps;
+            const data = [];
+            const duration = endTime - startTime;
+            // SPEED OPTIMIZATION: Detection doesn't need to run at 30fps.
+            // Running at 10-15fps is enough for tracking and 3x faster.
+            const analysisFps = isMobile ? 8 : 12;
+            const frameTime = 1 / analysisFps;
+            const videoFps = 30;
+            const videoFrameTime = 1 / videoFps;
 
-                // FIX: Force video element attributes to match intrinsic size
-                // This prevents MediaPipe/TFJS from using the CSS scaled metrics which causes coordinate shifts (e.g. face on chest)
-                const originalWidthAttr = video.width;
-                const originalHeightAttr = video.height;
-                if (video.videoWidth > 0) {
-                    video.width = video.videoWidth;
-                    video.height = video.videoHeight;
-                }
-
-                video.currentTime = startTime;
-                // Allow some time for seeking/buffering
-                await new Promise(r => setTimeout(r, 500));
-
-                let currentTime = startTime;
-
-
-                // TRACKING STATE
-                let activeTracks = []; // { id: int, box: {}, lastSeen: 0, excluded: bool }
-                let nextTrackId = 1;
-                // Persistence: Increased to 3 seconds (90 frames at 30fps) to bridge heavy occlusions
-                const MAX_PERSISTENCE = 90;
-
-                // Optimized Seek: Robust mobile handling
-                const seekTo = (t) => new Promise(resolve => {
-                    // Speed optimization: If already close enough (e.g. redundant seek), skip
-                    if (Math.abs(video.currentTime - t) < 0.1) {
-                        resolve();
-                        return;
-                    }
-
-                    let resolved = false;
-                    const finish = () => {
-                        if (resolved) return;
-                        resolved = true;
-                        video.removeEventListener('seeked', finish);
-                        resolve();
-                    };
-
-                    // Aggressive timeout: 300ms (instead of 1500ms). 
-                    // If 'seeked' doesn't fire in 300ms on mobile, we assume the frame is 'good enough' to keep moving
-                    // rather than freezing the UI for 1.5s per frame.
-                    setTimeout(finish, 300);
-
-                    video.addEventListener('seeked', finish, { once: true });
-                    video.currentTime = t;
-                });
-
-                // Scene Change Detection Setup
-                const scCanvas = document.createElement('canvas');
-                scCanvas.width = 48; // Small res for speed
-                scCanvas.height = 48;
-                const scCtx = scCanvas.getContext('2d', { willReadFrequently: true });
-                let lastFramePixels = null;
-
-                // Loop through time
-                while (currentTime < endTime) {
-                    if (state.processingCanceled) break;
-
-                    await seekTo(currentTime);
-
-                    // Check for Scene Change (Camera Cut)
-                    scCtx.drawImage(video, 0, 0, 48, 48);
-                    const currentPixels = scCtx.getImageData(0, 0, 48, 48).data;
-
-                    if (lastFramePixels) {
-                        let diffSum = 0;
-                        let samples = 0;
-                        // Sampling every 4th pixel (RGB)
-                        for (let i = 0; i < currentPixels.length; i += 16) {
-                            diffSum += Math.abs(currentPixels[i] - lastFramePixels[i]) +
-                                Math.abs(currentPixels[i + 1] - lastFramePixels[i + 1]) +
-                                Math.abs(currentPixels[i + 2] - lastFramePixels[i + 2]);
-                            samples++;
-                        }
-                        const avgDiff = diffSum / (samples * 3);
-
-                        // Threshold: >50 avg pixel diff indicates robust scene change (Increased to prevent false positives)
-                        if (avgDiff > 50) {
-                            // Camera Cut Detected! 
-                            console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
-
-                            // 1. Reset Persistence (Stop showing old faces)
-                            activeTracks = [];
-                            // 2. Reset Smoothing (Prevent new faces from 'sliding' from old positions)
-                            state.smoothedBoxes = {};
-                        }
-                    }
-                    lastFramePixels = currentPixels;
-
-                    let facesToSave = [];
-                    try {
-                        // Run Detection
-                        let detections;
-
-                        if (state.detectorType === 'mobile' && window.blazeDetector) {
-                            const predictions = await window.blazeDetector.estimateFaces(video, false, false, false);
-                            detections = predictions.map(pred => ({
-                                detection: {
-                                    box: {
-                                        x: pred.topLeft[0],
-                                        y: pred.topLeft[1],
-                                        width: pred.bottomRight[0] - pred.topLeft[0],
-                                        height: pred.bottomRight[1] - pred.topLeft[1]
-                                    },
-                                    score: pred.probability ? pred.probability[0] : 0.9
-                                },
-                                identity: null
-                            }));
-                        } else if (state.detectorType === 'tiny' || state.detectorType === 'ssd') {
-                            // Face-API Models
-                            if (!state.recognitionReady) {
-                                detections = await faceapi.detectAllFaces(video, window.faceDetector);
-                                detections = detections.map(d => ({ detection: d, identity: null }));
-                            } else {
-                                detections = await faceapi.detectAllFaces(video, window.faceDetector)
-                                    .withFaceLandmarks().withFaceDescriptors();
-                                detections = await identifyFaces(detections);
-                            }
-                        } else {
-                            // Fallback (e.g. if loaded but type unknown)
-                            detections = [];
-                        }
-
-                        let faces = filterFaces(detections);
-
-
-
-                        // --- TRACKING LOGIC ---
-                        // 1. Update existing tracks with new detections
-                        // Simple IoU matching
-                        const usedDetections = new Set();
-
-                        activeTracks.forEach(track => {
-                            let bestMatch = null;
-                            let maxIoU = 0.4; // High threshold for exact tracking identity matching
-
-                            faces.forEach((face, idx) => {
-                                if (usedDetections.has(idx)) return;
-                                const dBox = face.detection.box;
-
-                                // Calc IoU
-                                const xA = Math.max(track.box.x, dBox.x);
-                                const yA = Math.max(track.box.y, dBox.y);
-                                const xB = Math.min(track.box.x + track.box.width, dBox.x + dBox.width);
-                                const yB = Math.min(track.box.y + track.box.height, dBox.y + dBox.height);
-
-                                const interW = Math.max(0, xB - xA);
-                                const interH = Math.max(0, yB - yA);
-                                const interArea = interW * interH;
-                                const boxAArea = track.box.width * track.box.height;
-                                const boxBArea = dBox.width * dBox.height;
-                                const unionArea = boxAArea + boxBArea - interArea;
-                                const iou = interArea / unionArea;
-
-                                if (iou > maxIoU) {
-                                    maxIoU = iou;
-                                    bestMatch = { face, idx };
-                                }
-                            });
-
-                            if (bestMatch) {
-                                // MATCHED: Update track
-                                track.box = bestMatch.face.detection.box;
-                                track.lastSeen = 0; // Reset counter
-                                track.excluded = bestMatch.face.identity ? bestMatch.face.identity.excluded : track.excluded;
-                                usedDetections.add(bestMatch.idx);
-                            } else {
-                                // NO MATCH: Persist (Hold position)
-                                track.lastSeen++;
-                            }
-                        });
-
-                        // 2. Create NEW tracks for unused detections
-                        faces.forEach((face, idx) => {
-                            if (!usedDetections.has(idx)) {
-                                activeTracks.push({
-                                    id: nextTrackId++,
-                                    box: face.detection.box,
-                                    lastSeen: 0,
-                                    excluded: face.identity ? face.identity.excluded : false
-                                });
-                            }
-                        });
-
-                        // 3. Remove Dead Tracks & Prepare Output
-                        activeTracks = activeTracks.filter(t => t.lastSeen < (MAX_PERSISTENCE / (30 / analysisFps))); // Scale persistence
-
-                        const facesToSave = activeTracks.map(t => {
-                            const d = { detection: { box: t.box }, identity: { id: t.id, excluded: t.excluded } };
-                            const smoothed = smoothBoundingBox(d);
-                            return { box: smoothed, excluded: t.excluded, id: t.id };
-                        });
-
-                        // INTERPOLATION LOGIC: To eliminate "jumping" effect between 10fps detection and 30fps export
-                        const lastFrameData = data.length > 0 ? data[data.length - 1].faces : null;
-
-                        for (let t = currentTime; t < currentTime + frameTime && t < endTime; t += videoFrameTime) {
-                            const ratio = (t - currentTime) / frameTime;
-                            const interpolatedFaces = facesToSave.map(cf => {
-                                const prevF = lastFrameData ? lastFrameData.find(lf => lf.id === cf.id) : null;
-                                if (!prevF) return cf;
-
-                                // Linear Interpolation: (current_pos * ratio) + (prev_pos * (1-ratio))
-                                // This ensures absolute fluidity in the resulting video.
-                                return {
-                                    ...cf,
-                                    box: {
-                                        x: prevF.box.x + (cf.box.x - prevF.box.x) * ratio,
-                                        y: prevF.box.y + (cf.box.y - prevF.box.y) * ratio,
-                                        width: prevF.box.width + (cf.box.width - prevF.box.width) * ratio,
-                                        height: prevF.box.height + (cf.box.height - prevF.box.height) * ratio
-                                    }
-                                };
-                            });
-
-                            data.push({ time: t, faces: interpolatedFaces });
-                        }
-                    } catch (e) {
-                        console.warn('Detection skip', e);
-                        // Even if detection fails, carry over last data
-                        if (data.length > 0) {
-                            const last = data[data.length - 1];
-                            data.push({ time: currentTime, faces: last.faces });
-                        }
-                    }
-
-
-                }
-                // Restore original attributes
-                video.width = originalWidthAttr;
-                video.height = originalHeightAttr;
-
-                return data;
+            // FIX: Force video element attributes to match intrinsic size
+            // This prevents MediaPipe/TFJS from using the CSS scaled metrics which causes coordinate shifts (e.g. face on chest)
+            const originalWidthAttr = video.width;
+            const originalHeightAttr = video.height;
+            if (video.videoWidth > 0) {
+                video.width = video.videoWidth;
+                video.height = video.videoHeight;
             }
 
-            // Global resources for rendering
-            let processingRecorder = null;
-            let processingStream = null;
-            let processingChunks = [];
-            let processingCanvas = null;
-            let processingCtx = null;
+            video.currentTime = startTime;
+            // Allow some time for seeking/buffering
+            await new Promise(r => setTimeout(r, 500));
 
-            // Phase 2: Render video with effects (Continuous Stream)
-            async function renderVideoPass(startTime, endTime) {
-                return new Promise(async (resolve, reject) => {
-                    const chunks = []; // Local chunks accumulator for the single recorder
-                    const canvas = document.createElement('canvas');
-                    canvas.width = state.videoWidth;
-                    canvas.height = state.videoHeight;
-                    const ctx = canvas.getContext('2d');
-
-                    // Audio Setup
-                    let stream = processingCanvas.captureStream(30);
-                    try {
-                        const AudioContext = window.AudioContext || window.webkitAudioContext;
-                        if (AudioContext) {
-                            if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
-                            const audioCtx = window.audioCtxGlobal;
-                            if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-                            if (!video._audioSourceNode) {
-                                try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
-                            }
-                            if (video._audioSourceNode) {
-                                const dest = audioCtx.createMediaStreamDestination();
-                                video._audioSourceNode.connect(dest);
-                                if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
-                            }
-                        }
-                    } catch (e) { console.warn('Audio setup warning:', e); }
-
-                    processingStream = stream;
-
-                    let mimeType = 'video/webm;codecs=vp9,opus';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
-
-                    processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
-                    processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
-
-                    // Finalization helper to ensuring robust saving even on Safari
-                    const finalizeExport = () => {
-                        if (state.processedBlob) { resolve(); return; } // Already handled
-                        try {
-                            const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
-                            state.processedBlob = blob;
-                            if (processingStream) processingStream.getTracks().forEach(t => t.stop());
-                            resolve();
-                        } catch (e) { reject(e); }
-                    };
-
-                    processingRecorder.onstop = () => {
-                        console.log('Recorder stopped event');
-                        finalizeExport();
-                    };
-
-                    processingRecorder.start(100); // Start recording
-
-                    video.currentTime = startTime;
-                    video.muted = false;
-                    video.volume = 1.0;
-
-                    let analysisIndex = 0;
-                    const duration = endTime - startTime;
-
-                    video.play().then(() => {
-                        const drawLoop = () => {
-                            if (state.processingCanceled) {
-                                if (processingRecorder.state === 'recording') processingRecorder.stop();
-                                video.pause();
-                                reject(new Error('Cancelado por usuario'));
-                                return;
-                            }
-
-                            // End condition
-                            if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
-                                console.log('Render Pass finished');
-                                if (processingRecorder.state === 'recording') processingRecorder.stop();
-                                video.pause();
-
-                                // Safari Fallback: Force resolution if onstop fails
-                                setTimeout(finalizeExport, 1000);
-                                return;
-                            }
-
-                            // Draw video frame
-                            const padding = state.padding;
-                            processingCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
-
-                            // Find data for current frame
-                            while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
-                                analysisIndex++;
-                            }
-
-                            let frameData = null;
-                            if (analysisData[analysisIndex] && Math.abs(analysisData[analysisIndex].time - video.currentTime) < 1.0) {
-                                frameData = analysisData[analysisIndex];
-                            }
-
-                            // Apply effects
-                            if (frameData && frameData.faces) {
-                                frameData.faces.forEach(face => {
-                                    if (!face || face.excluded || !face.box) return;
-                                    const box = face.box;
-                                    const x = Math.max(0, box.x - (box.width * padding));
-                                    const y = Math.max(0, box.y - (box.height * padding));
-                                    const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
-                                    const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
-
-                                    if (state.effect === 'pixelate') pixelateArea(processingCtx, x, y, w, h);
-                                    else if (state.effect === 'blur') blurArea(processingCtx, x, y, w, h);
-                                    else solidArea(processingCtx, x, y, w, h);
-                                });
-                            }
-
-                            // Update Progress (Phase 2: 50-100%)
-                            const renderPct = ((video.currentTime - startTime) / duration) * 50;
-                            const totalPct = Math.min(100, 50 + Math.round(renderPct));
-
-                            elements.modalFill.style.width = totalPct + '%';
-                            elements.modalPercent.textContent = totalPct + '%';
-                            elements.modalSubtitle.textContent = `Fase 2/2: Generando (${formatTime(video.currentTime)} / ${formatTime(endTime)})`;
-
-                            requestAnimationFrame(drawLoop);
-                        };
-                        drawLoop();
-                    }).catch(reject);
-                });
-            }
+            let currentTime = startTime;
 
 
-            // Helper to check if PWA is already installed
-            function isPwaInstalled() {
-                return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-            }
+            // TRACKING STATE
+            let activeTracks = []; // { id: int, box: {}, lastSeen: 0, excluded: bool }
+            let nextTrackId = 1;
+            // Persistence: Increased to 3 seconds (90 frames at 30fps) to bridge heavy occlusions
+            const MAX_PERSISTENCE = 90;
 
-            // Export Success UI
-            function showExportSuccess() {
-                elements.modalTitle.textContent = '¡Video Listo!';
-                elements.modalSubtitle.textContent = 'Selecciona una opción:';
-
-                const fillParent = elements.modalFill.parentElement;
-                if (fillParent) fillParent.style.display = 'none';
-                if (elements.modalPercent) elements.modalPercent.style.display = 'none';
-
-                const spinner = document.querySelector('.modal-spinner');
-                if (spinner) spinner.style.display = 'none';
-
-                elements.cancelBtn.textContent = 'Cerrar';
-
-                const actions = document.getElementById('modalActions');
-                if (actions) actions.style.display = 'flex';
-
-                const blobType = state.processedBlob.type || 'video/webm';
-                const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
-
-                // Bind Download
-                const dlBtn = document.getElementById('btnDownload');
-                if (dlBtn) {
-                    dlBtn.onclick = () => {
-                        const url = URL.createObjectURL(state.processedBlob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `faceanon_pro_${Date.now()}.${ext}`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 10000);
-                    };
-                }
-
-                // Bind Share
-                const shareBtn = document.getElementById('btnShare');
-                if (shareBtn) {
-                    shareBtn.onclick = async () => {
-                        if (navigator.share) {
-                            const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
-                            try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
-                        } else {
-                            alert('Compartir no soportado en este dispositivo.');
-                        }
-                    };
-                }
-
-                elements.processBtn.disabled = false;
-                elements.exportBtn.disabled = false;
-
-                // Reset Audio/Video for user
-                video.muted = false;
-                video.volume = 1.0;
-            }
-
-            // Export video
-            function exportVideo() {
-                if (!state.processedBlob) {
-                    alert('Primero procesa un video');
+            // Optimized Seek: Robust mobile handling
+            const seekTo = (t) => new Promise(resolve => {
+                // Speed optimization: If already close enough (e.g. redundant seek), skip
+                if (Math.abs(video.currentTime - t) < 0.1) {
+                    resolve();
                     return;
                 }
-                const url = URL.createObjectURL(state.processedBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `faceanon_${Date.now()}.webm`;
-                a.click();
-            }
 
-            // Reset app
-            function resetApp() {
-                video.pause();
-                stopPreviewLoop();
+                let resolved = false;
+                const finish = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    video.removeEventListener('seeked', finish);
+                    resolve();
+                };
 
-                if (state.videoBlobUrl) {
-                    URL.revokeObjectURL(state.videoBlobUrl);
+                // Aggressive timeout: 300ms (instead of 1500ms). 
+                // If 'seeked' doesn't fire in 300ms on mobile, we assume the frame is 'good enough' to keep moving
+                // rather than freezing the UI for 1.5s per frame.
+                setTimeout(finish, 300);
+
+                video.addEventListener('seeked', finish, { once: true });
+                video.currentTime = t;
+            });
+
+            // Scene Change Detection Setup
+            const scCanvas = document.createElement('canvas');
+            scCanvas.width = 48; // Small res for speed
+            scCanvas.height = 48;
+            const scCtx = scCanvas.getContext('2d', { willReadFrequently: true });
+            let lastFramePixels = null;
+
+            // Loop through time
+            while (currentTime < endTime) {
+                if (state.processingCanceled) break;
+
+                await seekTo(currentTime);
+
+                // Check for Scene Change (Camera Cut)
+                scCtx.drawImage(video, 0, 0, 48, 48);
+                const currentPixels = scCtx.getImageData(0, 0, 48, 48).data;
+
+                if (lastFramePixels) {
+                    let diffSum = 0;
+                    let samples = 0;
+                    // Sampling every 4th pixel (RGB)
+                    for (let i = 0; i < currentPixels.length; i += 16) {
+                        diffSum += Math.abs(currentPixels[i] - lastFramePixels[i]) +
+                            Math.abs(currentPixels[i + 1] - lastFramePixels[i + 1]) +
+                            Math.abs(currentPixels[i + 2] - lastFramePixels[i + 2]);
+                        samples++;
+                    }
+                    const avgDiff = diffSum / (samples * 3);
+
+                    // Threshold: >50 avg pixel diff indicates robust scene change (Increased to prevent false positives)
+                    if (avgDiff > 50) {
+                        // Camera Cut Detected! 
+                        console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
+
+                        // 1. Reset Persistence (Stop showing old faces)
+                        activeTracks = [];
+                        // 2. Reset Smoothing (Prevent new faces from 'sliding' from old positions)
+                        state.smoothedBoxes = {};
+                    }
+                }
+                lastFramePixels = currentPixels;
+
+                let facesToSave = [];
+                try {
+                    // Run Detection
+                    let detections;
+
+                    if (state.detectorType === 'mobile' && window.blazeDetector) {
+                        const predictions = await window.blazeDetector.estimateFaces(video, false, false, false);
+                        detections = predictions.map(pred => ({
+                            detection: {
+                                box: {
+                                    x: pred.topLeft[0],
+                                    y: pred.topLeft[1],
+                                    width: pred.bottomRight[0] - pred.topLeft[0],
+                                    height: pred.bottomRight[1] - pred.topLeft[1]
+                                },
+                                score: pred.probability ? pred.probability[0] : 0.9
+                            },
+                            identity: null
+                        }));
+                    } else if (state.detectorType === 'tiny' || state.detectorType === 'ssd') {
+                        // Face-API Models
+                        if (!state.recognitionReady) {
+                            detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                            detections = detections.map(d => ({ detection: d, identity: null }));
+                        } else {
+                            detections = await faceapi.detectAllFaces(video, window.faceDetector)
+                                .withFaceLandmarks().withFaceDescriptors();
+                            detections = await identifyFaces(detections);
+                        }
+                    } else {
+                        // Fallback (e.g. if loaded but type unknown)
+                        detections = [];
+                    }
+
+                    let faces = filterFaces(detections);
+
+
+
+                    // --- TRACKING LOGIC ---
+                    // 1. Update existing tracks with new detections
+                    // Simple IoU matching
+                    const usedDetections = new Set();
+
+                    activeTracks.forEach(track => {
+                        let bestMatch = null;
+                        let maxIoU = 0.4; // High threshold for exact tracking identity matching
+
+                        faces.forEach((face, idx) => {
+                            if (usedDetections.has(idx)) return;
+                            const dBox = face.detection.box;
+
+                            // Calc IoU
+                            const xA = Math.max(track.box.x, dBox.x);
+                            const yA = Math.max(track.box.y, dBox.y);
+                            const xB = Math.min(track.box.x + track.box.width, dBox.x + dBox.width);
+                            const yB = Math.min(track.box.y + track.box.height, dBox.y + dBox.height);
+
+                            const interW = Math.max(0, xB - xA);
+                            const interH = Math.max(0, yB - yA);
+                            const interArea = interW * interH;
+                            const boxAArea = track.box.width * track.box.height;
+                            const boxBArea = dBox.width * dBox.height;
+                            const unionArea = boxAArea + boxBArea - interArea;
+                            const iou = interArea / unionArea;
+
+                            if (iou > maxIoU) {
+                                maxIoU = iou;
+                                bestMatch = { face, idx };
+                            }
+                        });
+
+                        if (bestMatch) {
+                            // MATCHED: Update track
+                            track.box = bestMatch.face.detection.box;
+                            track.lastSeen = 0; // Reset counter
+                            track.excluded = bestMatch.face.identity ? bestMatch.face.identity.excluded : track.excluded;
+                            usedDetections.add(bestMatch.idx);
+                        } else {
+                            // NO MATCH: Persist (Hold position)
+                            track.lastSeen++;
+                        }
+                    });
+
+                    // 2. Create NEW tracks for unused detections
+                    faces.forEach((face, idx) => {
+                        if (!usedDetections.has(idx)) {
+                            activeTracks.push({
+                                id: nextTrackId++,
+                                box: face.detection.box,
+                                lastSeen: 0,
+                                excluded: face.identity ? face.identity.excluded : false
+                            });
+                        }
+                    });
+
+                    // 3. Remove Dead Tracks & Prepare Output
+                    activeTracks = activeTracks.filter(t => t.lastSeen < (MAX_PERSISTENCE / (30 / analysisFps))); // Scale persistence
+
+                    const facesToSave = activeTracks.map(t => {
+                        const d = { detection: { box: t.box }, identity: { id: t.id, excluded: t.excluded } };
+                        const smoothed = smoothBoundingBox(d);
+                        return { box: smoothed, excluded: t.excluded, id: t.id };
+                    });
+
+                    // INTERPOLATION LOGIC: To eliminate "jumping" effect between 10fps detection and 30fps export
+                    const lastFrameData = data.length > 0 ? data[data.length - 1].faces : null;
+
+                    for (let t = currentTime; t < currentTime + frameTime && t < endTime; t += videoFrameTime) {
+                        const ratio = (t - currentTime) / frameTime;
+                        const interpolatedFaces = facesToSave.map(cf => {
+                            const prevF = lastFrameData ? lastFrameData.find(lf => lf.id === cf.id) : null;
+                            if (!prevF) return cf;
+
+                            // Linear Interpolation: (current_pos * ratio) + (prev_pos * (1-ratio))
+                            // This ensures absolute fluidity in the resulting video.
+                            return {
+                                ...cf,
+                                box: {
+                                    x: prevF.box.x + (cf.box.x - prevF.box.x) * ratio,
+                                    y: prevF.box.y + (cf.box.y - prevF.box.y) * ratio,
+                                    width: prevF.box.width + (cf.box.width - prevF.box.width) * ratio,
+                                    height: prevF.box.height + (cf.box.height - prevF.box.height) * ratio
+                                }
+                            };
+                        });
+
+                        data.push({ time: t, faces: interpolatedFaces });
+                    }
+                } catch (e) {
+                    console.warn('Detection skip', e);
+                    // Even if detection fails, carry over last data
+                    if (data.length > 0) {
+                        const last = data[data.length - 1];
+                        data.push({ time: currentTime, faces: last.faces });
+                    }
                 }
 
-                state.videoBlobUrl = null;
-                state.processedBlob = null;
-                state.isPlaying = false;
-                state.videoWidth = 0;
-                state.videoHeight = 0;
-                state.knownFaces = [];
-                state.lastKnownFaces = [];
-                state.smoothedBoxes = {};
-                if (elements.peopleList) {
-                    elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
-                }
 
-                elements.uploadArea.style.display = 'block';
-                elements.videoContainer.classList.remove('active');
-                elements.exportBtn.disabled = true;
-                elements.processBtn.disabled = true;
-                elements.fileInput.value = '';
-                elements.progressFill.style.width = '0%';
-                elements.timeDisplay.textContent = '0:00 / 0:00';
-                elements.playBtn.textContent = '▶';
+            }
+            // Restore original attributes
+            video.width = originalWidthAttr;
+            video.height = originalHeightAttr;
+
+            return data;
+        }
+
+        // Global resources for rendering
+        let processingRecorder = null;
+        let processingStream = null;
+        let processingChunks = [];
+        let processingCanvas = null;
+        let processingCtx = null;
+
+        // Phase 2: Render video with effects (Continuous Stream)
+        async function renderVideoPass(startTime, endTime) {
+            return new Promise(async (resolve, reject) => {
+                const chunks = []; // Local chunks accumulator for the single recorder
+                const canvas = document.createElement('canvas');
+                canvas.width = state.videoWidth;
+                canvas.height = state.videoHeight;
+                const ctx = canvas.getContext('2d');
+
+                // Audio Setup
+                let stream = processingCanvas.captureStream(30);
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
+                        const audioCtx = window.audioCtxGlobal;
+                        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                        if (!video._audioSourceNode) {
+                            try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
+                        }
+                        if (video._audioSourceNode) {
+                            const dest = audioCtx.createMediaStreamDestination();
+                            video._audioSourceNode.connect(dest);
+                            if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
+                        }
+                    }
+                } catch (e) { console.warn('Audio setup warning:', e); }
+
+                processingStream = stream;
+
+                let mimeType = 'video/webm;codecs=vp9,opus';
+                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
+
+                processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
+                processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
+
+                // Finalization helper to ensuring robust saving even on Safari
+                const finalizeExport = () => {
+                    if (state.processedBlob) { resolve(); return; } // Already handled
+                    try {
+                        const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
+                        state.processedBlob = blob;
+                        if (processingStream) processingStream.getTracks().forEach(t => t.stop());
+                        resolve();
+                    } catch (e) { reject(e); }
+                };
+
+                processingRecorder.onstop = () => {
+                    console.log('Recorder stopped event');
+                    finalizeExport();
+                };
+
+                processingRecorder.start(100); // Start recording
+
+                video.currentTime = startTime;
+                video.muted = false;
+                video.volume = 1.0;
+
+                let analysisIndex = 0;
+                const duration = endTime - startTime;
+
+                video.play().then(() => {
+                    const drawLoop = () => {
+                        if (state.processingCanceled) {
+                            if (processingRecorder.state === 'recording') processingRecorder.stop();
+                            video.pause();
+                            reject(new Error('Cancelado por usuario'));
+                            return;
+                        }
+
+                        // End condition
+                        if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
+                            console.log('Render Pass finished');
+                            if (processingRecorder.state === 'recording') processingRecorder.stop();
+                            video.pause();
+
+                            // Safari Fallback: Force resolution if onstop fails
+                            setTimeout(finalizeExport, 1000);
+                            return;
+                        }
+
+                        // Draw video frame
+                        const padding = state.padding;
+                        processingCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+
+                        // Find data for current frame
+                        while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
+                            analysisIndex++;
+                        }
+
+                        let frameData = null;
+                        if (analysisData[analysisIndex] && Math.abs(analysisData[analysisIndex].time - video.currentTime) < 1.0) {
+                            frameData = analysisData[analysisIndex];
+                        }
+
+                        // Apply effects
+                        if (frameData && frameData.faces) {
+                            frameData.faces.forEach(face => {
+                                if (!face || face.excluded || !face.box) return;
+                                const box = face.box;
+                                const x = Math.max(0, box.x - (box.width * padding));
+                                const y = Math.max(0, box.y - (box.height * padding));
+                                const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
+                                const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
+
+                                if (state.effect === 'pixelate') pixelateArea(processingCtx, x, y, w, h);
+                                else if (state.effect === 'blur') blurArea(processingCtx, x, y, w, h);
+                                else solidArea(processingCtx, x, y, w, h);
+                            });
+                        }
+
+                        // Update Progress (Phase 2: 50-100%)
+                        const renderPct = ((video.currentTime - startTime) / duration) * 50;
+                        const totalPct = Math.min(100, 50 + Math.round(renderPct));
+
+                        elements.modalFill.style.width = totalPct + '%';
+                        elements.modalPercent.textContent = totalPct + '%';
+                        elements.modalSubtitle.textContent = `Fase 2/2: Generando (${formatTime(video.currentTime)} / ${formatTime(endTime)})`;
+
+                        requestAnimationFrame(drawLoop);
+                    };
+                    drawLoop();
+                }).catch(reject);
+            });
+        }
+
+
+        // Helper to check if PWA is already installed
+        function isPwaInstalled() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        }
+
+        // Export Success UI
+        function showExportSuccess() {
+            elements.modalTitle.textContent = '¡Video Listo!';
+            elements.modalSubtitle.textContent = 'Selecciona una opción:';
+
+            const fillParent = elements.modalFill.parentElement;
+            if (fillParent) fillParent.style.display = 'none';
+            if (elements.modalPercent) elements.modalPercent.style.display = 'none';
+
+            const spinner = document.querySelector('.modal-spinner');
+            if (spinner) spinner.style.display = 'none';
+
+            elements.cancelBtn.textContent = 'Cerrar';
+
+            const actions = document.getElementById('modalActions');
+            if (actions) actions.style.display = 'flex';
+
+            const blobType = state.processedBlob.type || 'video/webm';
+            const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
+
+            // Bind Download
+            const dlBtn = document.getElementById('btnDownload');
+            if (dlBtn) {
+                dlBtn.onclick = () => {
+                    const url = URL.createObjectURL(state.processedBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `faceanon_pro_${Date.now()}.${ext}`;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                };
             }
 
-            // Start app
-            init();
+            // Bind Share
+            const shareBtn = document.getElementById('btnShare');
+            if (shareBtn) {
+                shareBtn.onclick = async () => {
+                    if (navigator.share) {
+                        const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
+                        try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
+                    } else {
+                        alert('Compartir no soportado en este dispositivo.');
+                    }
+                };
+            }
+
+            elements.processBtn.disabled = false;
+            elements.exportBtn.disabled = false;
+
+            // Reset Audio/Video for user
+            video.muted = false;
+            video.volume = 1.0;
+        }
+
+        // Export video
+        function exportVideo() {
+            if (!state.processedBlob) {
+                alert('Primero procesa un video');
+                return;
+            }
+            const url = URL.createObjectURL(state.processedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `faceanon_${Date.now()}.webm`;
+            a.click();
+        }
+
+        // Reset app
+        function resetApp() {
+            video.pause();
+            stopPreviewLoop();
+
+            if (state.videoBlobUrl) {
+                URL.revokeObjectURL(state.videoBlobUrl);
+            }
+
+            state.videoBlobUrl = null;
+            state.processedBlob = null;
+            state.isPlaying = false;
+            state.videoWidth = 0;
+            state.videoHeight = 0;
+            state.knownFaces = [];
+            state.lastKnownFaces = [];
+            state.smoothedBoxes = {};
+            if (elements.peopleList) {
+                elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
+            }
+
+            elements.uploadArea.style.display = 'block';
+            elements.videoContainer.classList.remove('active');
+            elements.exportBtn.disabled = true;
+            elements.processBtn.disabled = true;
+            elements.fileInput.value = '';
+            elements.progressFill.style.width = '0%';
+            elements.timeDisplay.textContent = '0:00 / 0:00';
+            elements.playBtn.textContent = '▶';
+        }
+
+        // Start app
+        init();
     </script>
 </body>
 
