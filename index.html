@@ -2039,7 +2039,8 @@
                             window.retinafaceModel = await blazeface.load({
                                 maxFaces: 100, // Detect ALL faces (high limit)
                                 iouThreshold: 0.3,
-                                scoreThreshold: 0.5 // Normal threshold to avoid false positives
+                                iouThreshold: 0.3,
+                                scoreThreshold: 0.35 // Balanced for high recall without much noise
                             });
                             loadedModel = 'retinaface';
                             updateModelStatus('det', 100, 'RetinaFace Listo');
@@ -2098,11 +2099,11 @@
 
                 // Configure Detector
                 if (loadedModel === 'ssd') {
-                    // Balanced High Precision
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 100 });
+                    // Balanced High Precision / Recall
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 100 });
                 } else if (loadedModel === 'tiny') {
-                    // Balanced High Precision
-                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 });
+                    // Balanced High Precision / Recall
+                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.35 });
                 } else if (loadedModel === 'retinaface') {
                     // These models use their own detectors
                     window.faceDetector = null;
@@ -3265,7 +3266,7 @@
             // TRACKING STATE
             let activeTracks = []; // { id: int, box: {}, lastSeen: 0, excluded: bool }
             let nextTrackId = 1;
-            const MAX_PERSISTENCE = 24; // 1 second persistence for robust gap filling
+            const MAX_PERSISTENCE = 45; // 1.5 seconds persistence to bridge any detection gap
 
             // Helper to seek reliably
             const seekTo = (t) => new Promise(resolve => {
