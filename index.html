@@ -3782,11 +3782,11 @@
                     // 3. Detect & Track (Only if model ready)
                     if (window.faceDetector || (this.state.detectorType === 'mobile' && window.blazeDetector)) {
                         try {
-                            const faces = await this.detectFaces(this.video);
+                            const faces = await this.detectFaces(canvas);
                             activeTracks = this.updateTracks(activeTracks, faces, nextTrackId);
                             // Update ID counter if needed (logic simplified for brevity)
                             if (activeTracks.length > 0) nextTrackId = Math.max(...activeTracks.map(t => t.id)) + 1;
-                        } catch (e) { /* Ignore detection glitches */ }
+                        } catch (e) { console.warn('Detection error:', e); }
                     }
 
                     // 4. Render Effects
@@ -3812,22 +3812,22 @@
                         resolve();
                     };
                     // Timeout safety for mobile
-                    setTimeout(onSeek, 500);
+                    setTimeout(onSeek, 800);
 
                     this.video.addEventListener('seeked', onSeek, { once: true });
                     this.video.currentTime = time;
                 });
             }
 
-            async detectFaces(video) {
+            async detectFaces(input) {
                 // Simplified detection router
                 if (this.state.detectorType === 'mobile' && window.blazeDetector) {
-                    const preds = await window.blazeDetector.estimateFaces(video, false, false, false);
+                    const preds = await window.blazeDetector.estimateFaces(input, false, false, false);
                     return preds.map(p => ({
                         box: { x: p.topLeft[0], y: p.topLeft[1], width: p.bottomRight[0] - p.topLeft[0], height: p.bottomRight[1] - p.topLeft[1] }
                     }));
                 } else if (window.faceDetector) {
-                    const detections = await faceapi.detectAllFaces(video, window.faceDetector);
+                    const detections = await faceapi.detectAllFaces(input, window.faceDetector);
                     return detections.map(d => ({ box: d.box }));
                 }
                 return [];
@@ -3880,7 +3880,7 @@
                 });
 
                 // Filter dead tracks
-                return updatedTracks.filter(t => t.lastSeen < 15); // 0.5s persistence
+                return updatedTracks.filter(t => t.lastSeen < 30); // 1s persistence
             }
 
             renderEffects(ctx, tracks) {
