@@ -2074,7 +2074,11 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        video.style.display = 'none';
+        // Optimization for mobile: hidden instead of display:none keeps the element 'active' for some browsers
+        video.style.position = 'fixed';
+        video.style.top = '-10000px';
+        video.style.left = '-10000px';
+        video.style.visibility = 'hidden';
         document.body.appendChild(video);
 
         // Processing canvas
@@ -3305,31 +3309,27 @@
             state.isProcessing = true;
             state.processingCanceled = false;
 
-            // UI Setup
-            video.pause();
-            stopPreviewLoop();
-            elements.processBtn.disabled = true;
-            elements.exportBtn.disabled = true;
-            elements.modal.classList.add('active');
-            elements.modalFill.style.width = '0%';
-            elements.modalPercent.textContent = '0%';
-            elements.modalTitle.textContent = 'Procesando Video';
-            elements.cancelBtn.style.display = 'block';
-            elements.cancelBtn.textContent = 'Cancelar';
-
-            // Reset cancel handler: Unify logic for cancel button
-            elements.cancelBtn.onclick = () => {
-                console.log('User requested cancellation');
-                state.processingCanceled = true;
-                state.isProcessing = false;
-                video.pause();
-                elements.modal.classList.remove('active');
-            };
-
-            const startTime = state.trimStart || 0;
-            const endTime = state.trimEnd || video.duration;
-
             try {
+                // UI Setup
+                video.pause();
+                stopPreviewLoop();
+                elements.processBtn.disabled = true;
+                elements.exportBtn.disabled = true;
+                elements.modal.classList.add('active');
+                elements.modalFill.style.width = '0%';
+                elements.modalPercent.textContent = '0%';
+                elements.modalTitle.textContent = 'Procesando Video';
+                elements.cancelBtn.style.display = 'block';
+                elements.cancelBtn.textContent = 'Cancelar';
+
+                // Reset cancel handler: Unify logic for cancel button
+                elements.cancelBtn.onclick = () => {
+                    console.log('User requested cancellation');
+                    state.processingCanceled = true;
+                    state.isProcessing = false;
+                    video.pause();
+                    elements.modal.classList.remove('active');
+                };
                 // PHASE 1: ANALYSIS (No Memory Crash)
                 elements.modalSubtitle.textContent = 'Fase 1/2: Analizando rostros...';
 
@@ -3383,8 +3383,10 @@
             // This prevents MediaPipe/TFJS from using the CSS scaled metrics which causes coordinate shifts (e.g. face on chest)
             const originalWidthAttr = video.width;
             const originalHeightAttr = video.height;
-            video.width = video.videoWidth;
-            video.height = video.videoHeight;
+            if (video.videoWidth > 0) {
+                video.width = video.videoWidth;
+                video.height = video.videoHeight;
+            }
 
             video.currentTime = startTime;
             // Allow some time for seeking/buffering
@@ -3399,12 +3401,17 @@
             // Persistence: Increased to 3 seconds (90 frames at 30fps) to bridge heavy occlusions
             const MAX_PERSISTENCE = 90;
 
-            // Optimized Seek: Reduce delay from 50ms to 20ms or less
+            // Optimized Seek: Added timeout for mobile stability
             const seekTo = (t) => new Promise(resolve => {
+                let resolved = false;
                 const h = () => {
+                    if (resolved) return;
+                    resolved = true;
                     video.removeEventListener('seeked', h);
                     resolve();
                 };
+                // Timeout fallback for mobile browsers that might skip 'seeked' event
+                setTimeout(h, 1500);
                 video.addEventListener('seeked', h, { once: true });
                 video.currentTime = t;
             });
