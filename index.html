@@ -3092,56 +3092,57 @@
                 // Create Canvas Stream (Video Only)
                 const stream = canvas.captureStream(30);
 
-                // Audio Setup - Prioritize AudioContext for reliability
+                // Audio Setup - PRIORITIZE captureStream for better sync
                 let audioTrack = null;
 
+                // 1. Try Native Stream Capture (Best Sync)
                 try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        if (!this.audioCtx) this.audioCtx = new AudioContext();
-                        if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+                    const vidStream = this.video.captureStream ? this.video.captureStream() :
+                        (this.video.mozCaptureStream ? this.video.mozCaptureStream() : null);
 
-                        // Singleton Source to avoid "already connected" error
-                        if (!this.audioSource) {
-                            this.audioSource = this.audioCtx.createMediaElementSource(this.video);
-                        }
-
-                        // Create destination for recording
-                        if (!this.audioDest) {
-                            this.audioDest = this.audioCtx.createMediaStreamDestination();
-                        }
-
-                        // Clean connections
-                        try { this.audioSource.disconnect(); } catch (e) { }
-
-                        // Connect: Source -> Dest (Recording)
-                        this.audioSource.connect(this.audioDest);
-
-                        // Connect: Source -> Hardware (Monitor)
-                        // We connect to hardware so the logic 'flow' of audio exists, 
-                        // preventing browser from pausing the processing graph.
-                        this.audioSource.connect(this.audioCtx.destination);
-
-                        if (this.audioDest.stream.getAudioTracks().length > 0) {
-                            audioTrack = this.audioDest.stream.getAudioTracks()[0];
-                            console.log('✓ Audio Graph Constructed: Source -> Dest & Speak');
-                        }
+                    if (vidStream && vidStream.getAudioTracks().length > 0) {
+                        audioTrack = vidStream.getAudioTracks()[0];
+                        console.log('✓ Audio obtained via captureStream (Native Sync)');
                     }
                 } catch (e) {
-                    console.warn('AudioContext Setup Failed:', e);
+                    console.warn('Native captureStream failed:', e);
                 }
 
-                // Fallback: captureStream from video element
+                // 2. Fallback: AudioContext (If native failed)
                 if (!audioTrack) {
-                    console.log('Using fallback audio capture...');
                     try {
-                        const vidStream = this.video.captureStream ? this.video.captureStream() :
-                            (this.video.mozCaptureStream ? this.video.mozCaptureStream() : null);
-                        if (vidStream && vidStream.getAudioTracks().length > 0) {
-                            audioTrack = vidStream.getAudioTracks()[0];
+                        console.log('Using AudioContext fallback for audio...');
+                        const AudioContext = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContext) {
+                            if (!this.audioCtx) this.audioCtx = new AudioContext();
+                            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+
+                            // Singleton Source
+                            if (!this.audioSource) {
+                                this.audioSource = this.audioCtx.createMediaElementSource(this.video);
+                            }
+
+                            // Create destination
+                            if (!this.audioDest) {
+                                this.audioDest = this.audioCtx.createMediaStreamDestination();
+                            }
+
+                            // Clean connections
+                            try { this.audioSource.disconnect(); } catch (e) { }
+
+                            // Connect: Source -> Dest (Recording)
+                            this.audioSource.connect(this.audioDest);
+
+                            // Connect: Source -> Hardware (Monitor)
+                            this.audioSource.connect(this.audioCtx.destination);
+
+                            if (this.audioDest.stream.getAudioTracks().length > 0) {
+                                audioTrack = this.audioDest.stream.getAudioTracks()[0];
+                                console.log('✓ Audio Graph Constructed via WebAudio');
+                            }
                         }
                     } catch (e) {
-                        console.warn('Fallback capture failed:', e);
+                        console.warn('AudioContext Setup Failed:', e);
                     }
                 }
 
