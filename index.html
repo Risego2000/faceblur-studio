@@ -14,20 +14,12 @@
     <!-- Face-API Library -->
     <script src="js/face-api.js"></script>
 
-    <!-- TensorFlow.js for BlazeFace -->
+    <!-- TensorFlow.js core handles WebGL for BlazeFace -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.15.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
 
-    <!-- Additional TensorFlow models -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.1"></script>
-
-    <!-- MediaPipe Face Detection -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229"></script>
-
-    <!-- ONNX Runtime Web for YOLO -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
 
     <style>
         * {
@@ -1669,7 +1661,7 @@
                             <div class="overlay-controls" style="flex-wrap: wrap; justify-content: center;">
                                 <button class="overlay-btn" data-model="ssd">SSD</button>
                                 <button class="overlay-btn" data-model="tiny">Tiny</button>
-                                <button class="overlay-btn" data-model="retinaface">RetinaFace</button>
+                                <button class="overlay-btn" data-model="mobile">Mobile</button>
                             </div>
                         </div>
 
@@ -2002,103 +1994,72 @@
                 return;
             }
 
+            const modelUrls = [
+                './models/',
+                'https://justadudewhohacks.github.io/face-api.js/models/'
+            ];
+
+            let loadedModel = null;
+
+            if (state.isLoadingModel) return;
+            state.isLoadingModel = true;
+
+            // Desactivar botones durante la carga
+            if (elements.modelBtns) elements.modelBtns.forEach(b => b.disabled = true);
+
+            const statusEl = document.getElementById('mainStatusText');
+            if (statusEl) statusEl.innerText = 'Iniciando Motores IA...';
+
+            // --- STAGE 1: DETECTOR ---
+            const modelPref = state.modelPreference;
+            const useAuto = modelPref === 'auto';
+
+            let detectorType = modelPref;
+            if (useAuto) {
+                detectorType = isMobile ? 'tiny' : 'ssd';
+            }
+
+            updateModelStatus('det', 0, 'Iniciando...');
+
+            // Load based on selected model
             try {
-                const modelUrls = [
-                    './models/',
-                    'https://justadudewhohacks.github.io/face-api.js/models/'
-                ];
-
-                let loadedModel = null;
-
-                if (state.isLoadingModel) return;
-                state.isLoadingModel = true;
-
-                // Desactivar botones durante la carga
-                if (elements.modelBtns) elements.modelBtns.forEach(b => b.disabled = true);
-
-                const statusEl = document.getElementById('mainStatusText');
-                if (statusEl) statusEl.innerText = 'Iniciando Motores IA...';
-
-                // --- STAGE 1: DETECTOR ---
-                const modelPref = state.modelPreference;
-                const useAuto = modelPref === 'auto';
-
-                let detectorType = modelPref;
-                if (useAuto) {
-                    detectorType = isMobile ? 'tiny' : 'ssd';
-                }
-
-                updateModelStatus('det', 0, 'Iniciando...');
-
-                // Load based on selected model
-                try {
-                    if (detectorType === 'retinaface') {
-                        // Use MediaPipe Face Detector (via TensorFlow models) as "RetinaFace"
-                        updateModelStatus('det', 30, 'Cargando RetinaFace...');
-                        if (window.faceDetection) {
-                            const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
-                            const detectorConfig = {
-                                runtime: 'tfjs',
-                                maxFaces: 100,
-                                modelType: 'full', // 'full' is better for detection at various distances (not just selfies)
-                                minDetectionConfidence: 0.25 // Ultra low threshold to catch ALL faces
-                            };
-                            window.retinafaceModel = await faceDetection.createDetector(model, detectorConfig);
-
-                            loadedModel = 'retinaface';
-                            updateModelStatus('det', 100, 'RetinaFace Listo');
-                        } else {
-                            // Fallback to old Blazeface if library missing
-                            if (typeof blazeface !== 'undefined') {
-                                window.retinafaceModel = await blazeface.load(); // Default args
-                                loadedModel = 'retinaface'; // Use legacy mapping check
-                                updateModelStatus('det', 100, 'RetinaFace (Legacy)');
-                            } else {
-                                throw new Error('RetinaFace libs missing');
-                            }
-                        }
-                    } else if (detectorType === 'tiny') {
-                        // Tiny Face Detector
-                        const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
-                        for (const modelUrl of modelUrls) {
-                            try {
-                                await prefetchFiles(modelUrl, tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
-                                await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
-                                loadedModel = 'tiny';
-                                updateModelStatus('det', 100, 'Tiny Listo');
-                                break;
-                            } catch (e) {
-                                console.warn('Tiny fallback', e);
-                            }
-                        }
+                if (detectorType === 'mobile') {
+                    // BlazeFace (Ultra Light for Mobile)
+                    updateModelStatus('det', 30, 'Cargando Mobile...');
+                    if (typeof blazeface !== 'undefined') {
+                        window.blazeDetector = await blazeface.load();
+                        loadedModel = 'mobile';
+                        updateModelStatus('det', 100, 'Mobile Listo');
                     } else {
-                        // SSD MobileNet (default)
-                        const ssdFiles = ['ssd_mobilenetv1_model-weights_manifest.json', 'ssd_mobilenetv1_model-shard1', 'ssd_mobilenetv1_model-shard2'];
-                        for (const modelUrl of modelUrls) {
-                            try {
-                                await prefetchFiles(modelUrl, ssdFiles, (pct, text) => updateModelStatus('det', pct, text));
-                                await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
-                                loadedModel = 'ssd';
-                                updateModelStatus('det', 100, 'SSD Listo');
-                                break;
-                            } catch (e) {
-                                console.warn('SSD fallback', e);
-                            }
+                        throw new Error('Script Mobile no cargado');
+                    }
+                } else if (detectorType === 'tiny') {
+                    // Tiny Face Detector
+                    const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
+                    for (const modelUrl of modelUrls) {
+                        try {
+                            await prefetchFiles(modelUrl, tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
+                            await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
+                            loadedModel = 'tiny';
+                            updateModelStatus('det', 100, 'Tiny Listo');
+                            break;
+                        } catch (e) {
+                            console.warn('Tiny fallback', e);
                         }
                     }
-                } catch (e) {
-                    console.error('Detector load error:', e);
-                    updateModelStatus('det', 0, 'Error: ' + e.message);
-                    // Fallback to Tiny
-                    try {
-                        const tinyFiles = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model-shard1'];
-                        await prefetchFiles(modelUrls[1], tinyFiles, (pct, text) => updateModelStatus('det', pct, text));
-                        await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrls[1]);
-                        loadedModel = 'tiny';
-                        updateModelStatus('det', 100, 'Tiny Listo (Fallback)');
-                    } catch (fallbackError) {
-                        updateModelStatus('det', 0, 'Fallo Crítico');
-                        throw new Error('No detector loaded');
+                } else {
+                    // SSD MobileNet (default)
+                    const ssdFiles = ['ssd_mobilenetv1_model-weights_manifest.json', 'ssd_mobilenetv1_model-shard1', 'ssd_mobilenetv1_model-shard2'];
+                    for (const modelUrl of modelUrls) {
+                        try {
+                            await prefetchFiles(modelUrl, ssdFiles, (pct, text) => updateModelStatus('det', pct, text));
+                            await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
+                            loadedModel = 'ssd';
+                            updateModelStatus('det', 100, 'SSD Listo');
+                            break;
+                        } catch (e) {
+                            console.warn('SSD fallback', e);
+                        }
                     }
                 }
 
@@ -2110,13 +2071,13 @@
                 // Configure Detector
                 if (loadedModel === 'ssd') {
                     // Balanced High Precision / Recall
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 100 });
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3, maxResults: 100 });
                 } else if (loadedModel === 'tiny') {
-                    // Balanced High Precision / Recall
-                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.35 });
-                } else if (loadedModel === 'retinaface') {
-                    // These models use their own detectors
-                    window.faceDetector = null;
+                    // Optimized input size for mobile performance vs accuracy
+                    const tSize = isMobile ? 320 : 512;
+                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: tSize, scoreThreshold: 0.3 });
+                } else if (loadedModel === 'mobile') {
+                    window.faceDetector = null; // Uses blazeDetector
                 }
                 state.detectorType = loadedModel;
 
@@ -2153,7 +2114,7 @@
                 const modelNames = {
                     'ssd': 'SSD Precision',
                     'tiny': 'Tiny Fast',
-                    'retinaface': 'RetinaFace Pro'
+                    'mobile': 'Mobile Ultra'
                 };
                 const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
                 const statusStr = `IA Lista (${modelName})`;
@@ -2181,7 +2142,7 @@
                 const modelNames = {
                     'ssd': 'SSD Precision',
                     'tiny': 'Tiny Fast',
-                    'retinaface': 'RetinaFace Pro'
+                    'mobile': 'Mobile Ultra'
                 };
                 const modelName = modelNames[state.detectorType] || state.detectorType || 'Cargando...';
                 span.textContent = `IA Lista (${modelName})`;
@@ -2342,7 +2303,7 @@
                 'auto': 'Selección automática según dispositivo',
                 'ssd': 'Equilibrado: Buena precisión y velocidad (2MB)',
                 'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
-                'retinaface': 'Alta precisión: Detección robusta de múltiples rostros (100KB)'
+                'mobile': 'Ultra-Ligero: Máximo rendimiento móvil (200KB)'
             };
 
             elements.modelBtns.forEach(btn => {
@@ -2790,10 +2751,9 @@
                 // Use full detection if recognition is ready, otherwise basic
                 let detections;
 
-                // Handle BlazeFace separately
-                if (state.detectorType === 'blazeface' && window.blazefaceModel) {
-                    const predictions = await window.blazefaceModel.estimateFaces(video, false);
-                    // Convert BlazeFace format to face-api format
+                // Handle Mobile / BlazeFace separately
+                if (state.detectorType === 'mobile' && window.blazeDetector) {
+                    const predictions = await window.blazeDetector.estimateFaces(video, false);
                     detections = predictions.map(pred => ({
                         detection: {
                             box: {
@@ -2802,125 +2762,10 @@
                                 width: pred.bottomRight[0] - pred.topLeft[0],
                                 height: pred.bottomRight[1] - pred.topLeft[1]
                             },
-                            score: pred.probability[0]
+                            score: pred.probability ? pred.probability[0] : 0.9
                         },
                         identity: null
                     }));
-                } else if (state.detectorType === 'mediapipe' && window.mediapipeDetector) {
-                    // MediaPipe Face Detection
-                    const results = await window.mediapipeDetector.send({ image: video });
-                    detections = (results.detections || []).map(det => ({
-                        detection: {
-                            box: {
-                                x: det.boundingBox.xCenter * video.videoWidth - (det.boundingBox.width * video.videoWidth / 2),
-                                y: det.boundingBox.yCenter * video.videoHeight - (det.boundingBox.height * video.videoHeight / 2),
-                                width: det.boundingBox.width * video.videoWidth,
-                                height: det.boundingBox.height * video.videoHeight
-                            },
-                            score: det.score[0]
-                        },
-                        identity: null
-                    }));
-                } else if (state.detectorType === 'mediapipe' && window.mediapipeDetector) {
-                    // MediaPipe Face Detection
-                    const predictions = await window.mediapipeDetector.estimateFaces(video);
-                    detections = predictions.map(pred => ({
-                        detection: {
-                            box: {
-                                x: pred.box.xMin,
-                                y: pred.box.yMin,
-                                width: pred.box.width,
-                                height: pred.box.height
-                            },
-                            score: pred.score || 0.9
-                        },
-                        identity: null
-                    }));
-                } else if (state.detectorType === 'retinaface' && window.retinafaceModel) {
-                    // RetinaFace Detection
-                    const predictions = await window.retinafaceModel.estimateFaces(video, false);
-                    detections = predictions.map(pred => ({
-                        detection: {
-                            box: {
-                                x: pred.topLeft[0],
-                                y: pred.topLeft[1],
-                                width: pred.bottomRight[0] - pred.topLeft[0],
-                                height: pred.bottomRight[1] - pred.topLeft[1]
-                            },
-                            score: pred.probability[0]
-                        },
-                        identity: null
-                    }));
-                } else if (state.detectorType === 'faceboxes' && window.faceboxesModel) {
-                    // FaceBoxes Detection
-                    const predictions = await window.faceboxesModel.estimateFaces(video, false);
-                    detections = predictions.map(pred => ({
-                        detection: {
-                            box: {
-                                x: pred.topLeft[0],
-                                y: pred.topLeft[1],
-                                width: pred.bottomRight[0] - pred.topLeft[0],
-                                height: pred.bottomRight[1] - pred.topLeft[1]
-                            },
-                            score: pred.probability[0]
-                        },
-                        identity: null
-                    }));
-                } else if (state.detectorType === 'yolo' && window.yoloSession) {
-                    // UltraFace Detection (ONNX)
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 320;
-                    canvas.height = 240;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, 320, 240);
-
-                    const imageData = ctx.getImageData(0, 0, 320, 240);
-                    const input = new Float32Array(3 * 320 * 240);
-
-                    // Normalize and transpose (CHW format)
-                    for (let i = 0; i < 320 * 240; i++) {
-                        input[i] = (imageData.data[i * 4] - 127) / 128.0;
-                        input[320 * 240 + i] = (imageData.data[i * 4 + 1] - 127) / 128.0;
-                        input[2 * 320 * 240 + i] = (imageData.data[i * 4 + 2] - 127) / 128.0;
-                    }
-
-                    const tensor = new ort.Tensor('float32', input, [1, 3, 240, 320]);
-                    const outputs = await window.yoloSession.run({ input: tensor });
-
-                    // UltraFace outputs: boxes and scores
-                    const boxes = outputs.boxes ? outputs.boxes.data : (outputs.output ? outputs.output.data : []);
-                    const scores = outputs.scores ? outputs.scores.data : [];
-
-                    detections = [];
-                    const scaleX = video.videoWidth / 320;
-                    const scaleY = video.videoHeight / 240;
-
-                    // Parse detections (format varies by model)
-                    if (boxes.length > 0) {
-                        const numDetections = Math.floor(boxes.length / 4);
-                        for (let i = 0; i < numDetections; i++) {
-                            const score = scores[i] || 0.9;
-                            if (score > 0.7) {
-                                const x1 = boxes[i * 4] * scaleX;
-                                const y1 = boxes[i * 4 + 1] * scaleY;
-                                const x2 = boxes[i * 4 + 2] * scaleX;
-                                const y2 = boxes[i * 4 + 3] * scaleY;
-
-                                detections.push({
-                                    detection: {
-                                        box: {
-                                            x: x1,
-                                            y: y1,
-                                            width: x2 - x1,
-                                            height: y2 - y1
-                                        },
-                                        score: score
-                                    },
-                                    identity: null
-                                });
-                            }
-                        }
-                    }
                 } else if (!state.recognitionReady) {
                     // Basic detection (faster, no recognition)
                     detections = await faceapi.detectAllFaces(video, window.faceDetector);
@@ -2964,19 +2809,23 @@
         }
 
         // EMA Smoothing logic to eliminate jitter for exact tracking
-        const SMOOTHING_FACTOR = isMobile ? 0.7 : 0.8; // Slightly more smoothing on mobile for stability
+        const SMOOTHING_FACTOR = isMobile ? 0.6 : 0.75;
         function smoothBoundingBox(detection) {
             const rawBox = detection.detection.box;
-            const personId = detection.identity ? detection.identity.id : 'unknown';
+            const personId = detection.identity ? (detection.identity.id || 'unknown') : 'unknown';
 
             if (!state.smoothedBoxes) state.smoothedBoxes = {};
             const prev = state.smoothedBoxes[personId] || rawBox;
 
+            // Adaptive Smoothing: if movement is large, follow faster to maintain exactness
+            const dist = Math.sqrt(Math.pow(rawBox.x - prev.x, 2) + Math.pow(rawBox.y - prev.y, 2));
+            const factor = dist > 20 ? 0.92 : SMOOTHING_FACTOR;
+
             const smoothed = {
-                x: prev.x + (rawBox.x - prev.x) * SMOOTHING_FACTOR,
-                y: prev.y + (rawBox.y - prev.y) * SMOOTHING_FACTOR,
-                width: prev.width + (rawBox.width - prev.width) * SMOOTHING_FACTOR,
-                height: prev.height + (rawBox.height - prev.height) * SMOOTHING_FACTOR
+                x: prev.x + (rawBox.x - prev.x) * factor,
+                y: prev.y + (rawBox.y - prev.y) * factor,
+                width: prev.width + (rawBox.width - prev.width) * factor,
+                height: prev.height + (rawBox.height - prev.height) * factor
             };
 
             state.smoothedBoxes[personId] = smoothed;
@@ -3170,26 +3019,49 @@
         }
 
         function filterFaces(detections) {
-            return detections;
+            if (!detections) return [];
+            return detections.filter(d => {
+                const score = (d.detection && d.detection.score) ? d.detection.score : 0.5;
+                const box = (d.detection && d.detection.box) ? d.detection.box : null;
+                if (!box) return false;
+                // Minimum size to avoid noise (2% of video width)
+                const minDim = Math.min(video.videoWidth, video.videoHeight) * 0.02;
+                return score > 0.35 && box.width > minDim && box.height > minDim;
+            });
         }
+
+        // Dedicated off-screen canvas for effects (re-used to save memory/GC)
+        const fxCanvas = document.createElement('canvas');
+        const fxCtx = fxCanvas.getContext('2d');
 
         function pixelateArea(ctx, x, y, w, h) {
             if (w <= 0 || h <= 0) return;
-            ctx.imageSmoothingEnabled = false;
             const size = Math.max(1, Math.floor(w / state.intensity));
-            ctx.drawImage(ctx.canvas, x, y, w, h, x, y, size, size);
-            ctx.drawImage(ctx.canvas, x, y, size, size, x, y, w, h);
+
+            fxCanvas.width = size;
+            fxCanvas.height = size;
+            fxCtx.imageSmoothingEnabled = false;
+
+            // Draw downscaled to FX canvas
+            fxCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, size, size);
+
+            // Draw back upscaled
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(fxCanvas, 0, 0, size, size, x, y, w, h);
         }
 
         function blurArea(ctx, x, y, w, h) {
             if (w <= 0 || h <= 0) return;
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, y, w, h);
-            ctx.clip();
-            ctx.filter = `blur(${state.intensity}px)`;
-            ctx.drawImage(ctx.canvas, 0, 0);
-            ctx.restore();
+
+            fxCanvas.width = w;
+            fxCanvas.height = h;
+            fxCtx.filter = `blur(${state.intensity}px)`;
+
+            // Draw region to FX canvas with filter
+            fxCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+
+            // Draw back to main
+            ctx.drawImage(fxCanvas, x, y);
         }
 
         function solidArea(ctx, x, y, w, h) {
@@ -3262,9 +3134,12 @@
         async function analyzeVideoPass(startTime, endTime) {
             const data = [];
             const duration = endTime - startTime;
-            // Analysis FPS: 30 matches standard video/export rate for frame-by-frame precision
-            const fps = 30;
-            const frameTime = 1 / fps;
+            // SPEED OPTIMIZATION: Detection doesn't need to run at 30fps.
+            // Running at 10-15fps is enough for tracking and 3x faster.
+            const analysisFps = isMobile ? 8 : 12;
+            const frameTime = 1 / analysisFps;
+            const videoFps = 30;
+            const videoFrameTime = 1 / videoFps;
 
             // FIX: Force video element attributes to match intrinsic size
             // This prevents MediaPipe/TFJS from using the CSS scaled metrics which causes coordinate shifts (e.g. face on chest)
@@ -3285,13 +3160,13 @@
             let nextTrackId = 1;
             const MAX_PERSISTENCE = 45; // 1.5 seconds persistence to bridge any detection gap
 
-            // Helper to seek reliably
+            // Optimized Seek: Reduce delay from 50ms to 20ms or less
             const seekTo = (t) => new Promise(resolve => {
                 const h = () => {
                     video.removeEventListener('seeked', h);
-                    setTimeout(resolve, 50);
+                    resolve();
                 };
-                video.addEventListener('seeked', h);
+                video.addEventListener('seeked', h, { once: true });
                 video.currentTime = t;
             });
 
@@ -3331,8 +3206,6 @@
 
                         // 1. Reset Persistence (Stop showing old faces)
                         activeTracks = [];
-                        persistenceCounter = 0;
-
                         // 2. Reset Smoothing (Prevent new faces from 'sliding' from old positions)
                         state.smoothedBoxes = {};
                     }
@@ -3344,76 +3217,20 @@
                     // Run Detection
                     let detections;
 
-                    if (state.detectorType === 'retinaface' && window.retinafaceModel) {
-                        // Check if it's the NEW detector (has .estimateFaces accepting config) or OLD BlazeFace
-                        // We can heuristics check referencing the method length or just try/catch or simple check
-                        // BUT simpler: check the global flag or object properties.
-
-                        let predictions;
-                        try {
-                            // Try New API format (object config)
-                            // If it's old blazeface, passing object as 2nd arg might fail or be treated as 'returnTensors' (truthy)
-                            // Safest is to check the loaded model type
-
-                            if (window.retinafaceModel.getCustomGLProgram) {
-                                // Old BlazeFace usually has this or similar tfjs props. 
-                                // Or we can check if window.faceDetection was used.
-                                // Safer: Call the old signature if we fell back.
-                                // Actually let's assume New API unless we flagged it as legacy.
-                                // But I didn't save the flag in state. 
-                                // Let's use runtime check.
-                                if (window.faceDetection && window.retinafaceModel instanceof window.faceDetection.FaceDetector) {
-                                    /* It's NOT an instance of that class directly usually, it's a wrapper. */
-                                }
-                            }
-
-                            // Universal Call Strategy
-                            // Old BlazeFace: estimateFaces(input, returnTensors=false, flipHorizontal=false, annotateBoxes=true)
-                            // New Detector: estimateFaces(input, estimationConfig?)
-
-                            if (window.faceDetection && window.retinafaceModel.locateFile === undefined) {
-                                // Likely New Detector
-                                predictions = await window.retinafaceModel.estimateFaces(video, { flipHorizontal: false });
-                            } else {
-                                // Likely Old BlazeFace
-                                predictions = await window.retinafaceModel.estimateFaces(video, false, false, false);
-                            }
-
-                        } catch (e) {
-                            console.warn('RetinaFace fail, retry with legacy sig', e);
-                            predictions = await window.retinafaceModel.estimateFaces(video, false, false, false);
-                        }
-
-                        detections = predictions.map(pred => {
-                            // Check format: New FaceDetection API returns .box { xMin, yMin, width, height }
-                            // Old BlazeFace returns topLeft/bottomRight
-                            let box = {};
-                            if (pred.box) {
-                                // New API
-                                box = {
-                                    x: pred.box.xMin,
-                                    y: pred.box.yMin,
-                                    width: pred.box.width,
-                                    height: pred.box.height
-                                };
-                            } else if (pred.topLeft) {
-                                // Legacy BlazeFace
-                                box = {
+                    if (state.detectorType === 'mobile' && window.blazeDetector) {
+                        const predictions = await window.blazeDetector.estimateFaces(video, false, false, false);
+                        detections = predictions.map(pred => ({
+                            detection: {
+                                box: {
                                     x: pred.topLeft[0],
                                     y: pred.topLeft[1],
                                     width: pred.bottomRight[0] - pred.topLeft[0],
                                     height: pred.bottomRight[1] - pred.topLeft[1]
-                                };
-                            }
-
-                            return {
-                                detection: {
-                                    box: box,
-                                    score: pred.score ? pred.score[0] : (pred.probability ? pred.probability[0] : 0.9)
                                 },
-                                identity: null
-                            };
-                        });
+                                score: pred.probability ? pred.probability[0] : 0.9
+                            },
+                            identity: null
+                        }));
                     } else if (state.detectorType === 'tiny' || state.detectorType === 'ssd') {
                         // Face-API Models
                         if (!state.recognitionReady) {
@@ -3491,39 +3308,56 @@
                     });
 
                     // 3. Remove Dead Tracks & Prepare Output
-                    activeTracks = activeTracks.filter(t => t.lastSeen < MAX_PERSISTENCE);
+                    activeTracks = activeTracks.filter(t => t.lastSeen < (MAX_PERSISTENCE / (30 / analysisFps))); // Scale persistence
 
-                    // Use TRACKS for saving, not raw detections
-                    facesToSave = activeTracks.map(t => {
-                        // Create a fake detection object for smoother
+                    const facesToSave = activeTracks.map(t => {
                         const d = { detection: { box: t.box }, identity: { id: t.id, excluded: t.excluded } };
                         const smoothed = smoothBoundingBox(d);
-                        return {
-                            box: smoothed,
-                            excluded: t.excluded,
-                            id: t.id
-                        };
+                        return { box: smoothed, excluded: t.excluded, id: t.id };
                     });
 
-                    // Extract only necessary data (Box coordinates) to save memory
-                    /* facesToSave is now generated from activeTracks above */
+                    // INTERPOLATION LOGIC: To eliminate "jumping" effect between 10fps detection and 30fps export
+                    const lastFrameData = data.length > 0 ? data[data.length - 1].faces : null;
 
-                } catch (e) { console.warn('Detection skip', e); }
+                    for (let t = currentTime; t < currentTime + frameTime && t < endTime; t += videoFrameTime) {
+                        const ratio = (t - currentTime) / frameTime;
+                        const interpolatedFaces = facesToSave.map(cf => {
+                            const prevF = lastFrameData ? lastFrameData.find(lf => lf.id === cf.id) : null;
+                            if (!prevF) return cf;
 
-                // Store Result
-                data.push({
-                    time: currentTime,
-                    faces: facesToSave
-                });
+                            // Linear Interpolation: (current_pos * ratio) + (prev_pos * (1-ratio))
+                            // This ensures absolute fluidity in the resulting video.
+                            return {
+                                ...cf,
+                                box: {
+                                    x: prevF.box.x + (cf.box.x - prevF.box.x) * ratio,
+                                    y: prevF.box.y + (cf.box.y - prevF.box.y) * ratio,
+                                    width: prevF.box.width + (cf.box.width - prevF.box.width) * ratio,
+                                    height: prevF.box.height + (cf.box.height - prevF.box.height) * ratio
+                                }
+                            };
+                        });
+
+                        data.push({ time: t, faces: interpolatedFaces });
+                    }
+                } catch (e) {
+                    console.warn('Detection skip', e);
+                    // Even if detection fails, carry over last data
+                    if (data.length > 0) {
+                        const last = data[data.length - 1];
+                        data.push({ time: currentTime, faces: last.faces });
+                    }
+                }
 
                 // Update Progress (Phase 1)
                 const pct = Math.min(100, Math.round(((currentTime - startTime) / duration) * 100));
                 elements.modalFill.style.width = pct + '%';
                 elements.modalPercent.textContent = pct + '%';
-                elements.modalSubtitle.textContent = `Analizando: ${formatTime(currentTime)} / ${formatTime(endTime)}`;
+                elements.modalSubtitle.textContent = `Fase 1/2: Analizando (${formatTime(currentTime)} / ${formatTime(endTime)})`;
 
                 currentTime += frameTime;
             }
+
 
             // Restore original attributes
             video.width = originalWidthAttr;
