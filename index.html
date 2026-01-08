@@ -2040,8 +2040,8 @@
                             const detectorConfig = {
                                 runtime: 'tfjs',
                                 maxFaces: 100,
-                                modelType: 'short',
-                                minDetectionConfidence: 0.3 // Lower threshold for better tracking
+                                modelType: 'full', // 'full' is better for detection at various distances (not just selfies)
+                                minDetectionConfidence: 0.25 // Ultra low threshold to catch ALL faces
                             };
                             window.retinafaceModel = await faceDetection.createDetector(model, detectorConfig);
 
@@ -3266,6 +3266,13 @@
             const fps = 30;
             const frameTime = 1 / fps;
 
+            // FIX: Force video element attributes to match intrinsic size
+            // This prevents MediaPipe/TFJS from using the CSS scaled metrics which causes coordinate shifts (e.g. face on chest)
+            const originalWidthAttr = video.width;
+            const originalHeightAttr = video.height;
+            video.width = video.videoWidth;
+            video.height = video.videoHeight;
+
             video.currentTime = startTime;
             // Allow some time for seeking/buffering
             await new Promise(r => setTimeout(r, 500));
@@ -3517,6 +3524,10 @@
 
                 currentTime += frameTime;
             }
+
+            // Restore original attributes
+            video.width = originalWidthAttr;
+            video.height = originalHeightAttr;
 
             return data;
         }
