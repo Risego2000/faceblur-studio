@@ -3260,9 +3260,12 @@
             await new Promise(r => setTimeout(r, 500));
 
             let currentTime = startTime;
-            let lastKnownFaces = [];
-            let persistenceCounter = 0;
-            const MAX_PERSISTENCE = 15; // Increased for exhaustive tracking (approx 0.6s)
+
+
+            // TRACKING STATE
+            let activeTracks = []; // { id: int, box: {}, lastSeen: 0, excluded: bool }
+            let nextTrackId = 1;
+            const MAX_PERSISTENCE = 24; // 1 second persistence for robust gap filling
 
             // Helper to seek reliably
             const seekTo = (t) => new Promise(resolve => {
@@ -3309,7 +3312,7 @@
                         console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
 
                         // 1. Reset Persistence (Stop showing old faces)
-                        lastKnownFaces = [];
+                        activeTracks = [];
                         persistenceCounter = 0;
 
                         // 2. Reset Smoothing (Prevent new faces from 'sliding' from old positions)
@@ -3354,24 +3357,82 @@
 
                     let faces = filterFaces(detections);
 
-                    // Apply Persistence (fill gaps)
-                    if (faces.length === 0 && persistenceCounter > 0) {
-                        faces = lastKnownFaces;
-                        persistenceCounter--;
-                    } else if (faces.length > 0) {
-                        lastKnownFaces = faces;
-                        persistenceCounter = MAX_PERSISTENCE;
-                    }
 
-                    // Extract only necessary data (Box coordinates) to save memory
-                    facesToSave = faces.map(d => {
+
+                    // --- TRACKING LOGIC ---
+                    // 1. Update existing tracks with new detections
+                    // Simple IoU matching
+                    const usedDetections = new Set();
+
+                    activeTracks.forEach(track => {
+                        let bestMatch = null;
+                        let maxIoU = 0.1; // Min IoU to match
+
+                        faces.forEach((face, idx) => {
+                            if (usedDetections.has(idx)) return;
+                            const dBox = face.detection.box;
+
+                            // Calc IoU
+                            const xA = Math.max(track.box.x, dBox.x);
+                            const yA = Math.max(track.box.y, dBox.y);
+                            const xB = Math.min(track.box.x + track.box.width, dBox.x + dBox.width);
+                            const yB = Math.min(track.box.y + track.box.height, dBox.y + dBox.height);
+
+                            const interW = Math.max(0, xB - xA);
+                            const interH = Math.max(0, yB - yA);
+                            const interArea = interW * interH;
+                            const boxAArea = track.box.width * track.box.height;
+                            const boxBArea = dBox.width * dBox.height;
+                            const unionArea = boxAArea + boxBArea - interArea;
+                            const iou = interArea / unionArea;
+
+                            if (iou > maxIoU) {
+                                maxIoU = iou;
+                                bestMatch = { face, idx };
+                            }
+                        });
+
+                        if (bestMatch) {
+                            // MATCHED: Update track
+                            track.box = bestMatch.face.detection.box;
+                            track.lastSeen = 0; // Reset counter
+                            track.excluded = bestMatch.face.identity ? bestMatch.face.identity.excluded : track.excluded;
+                            usedDetections.add(bestMatch.idx);
+                        } else {
+                            // NO MATCH: Persist (Hold position)
+                            track.lastSeen++;
+                        }
+                    });
+
+                    // 2. Create NEW tracks for unused detections
+                    faces.forEach((face, idx) => {
+                        if (!usedDetections.has(idx)) {
+                            activeTracks.push({
+                                id: nextTrackId++,
+                                box: face.detection.box,
+                                lastSeen: 0,
+                                excluded: face.identity ? face.identity.excluded : false
+                            });
+                        }
+                    });
+
+                    // 3. Remove Dead Tracks & Prepare Output
+                    activeTracks = activeTracks.filter(t => t.lastSeen < MAX_PERSISTENCE);
+
+                    // Use TRACKS for saving, not raw detections
+                    facesToSave = activeTracks.map(t => {
+                        // Create a fake detection object for smoother
+                        const d = { detection: { box: t.box }, identity: { id: t.id, excluded: t.excluded } };
                         const smoothed = smoothBoundingBox(d);
                         return {
                             box: smoothed,
-                            excluded: d.identity ? d.identity.excluded : false,
-                            id: d.identity ? d.identity.id : null
+                            excluded: t.excluded,
+                            id: t.id
                         };
                     });
+
+                    // Extract only necessary data (Box coordinates) to save memory
+                    /* facesToSave is now generated from activeTracks above */
 
                 } catch (e) { console.warn('Detection skip', e); }
 
