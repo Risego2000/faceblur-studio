@@ -3507,11 +3507,16 @@
                             else solidArea(ctx, x, y, w, h);
                         });
 
-                        // CRITICAL: Manually capture this frame for recording
-                        // This ensures consistent 30fps output regardless of AI processing speed
+                        // CRITICAL: Capture frame for recording
+                        // Method 1: Use requestFrame if available (best for timing accuracy)
                         const videoTrack = stream.getVideoTracks()[0];
                         if (videoTrack && videoTrack.requestFrame) {
                             videoTrack.requestFrame();
+                        } else {
+                            // Method 2: Force canvas update (fallback)
+                            // Draw a tiny pixel to force stream update
+                            const currentPixel = ctx.getImageData(0, 0, 1, 1);
+                            ctx.putImageData(currentPixel, 0, 0);
                         }
 
                         // 4. UPDATE UI
@@ -3541,6 +3546,11 @@
 
                         currentTime += frameTime;
                     }
+
+                    // Log final frame count for verification
+                    const expectedFrames = Math.round(duration * fps);
+                    const actualFrames = Math.round((currentTime - startTime) / frameTime);
+                    console.log(`Processed ${actualFrames} frames (expected ${expectedFrames}) for ${duration.toFixed(1)}s video at ${fps}fps`);
 
                     // Finalize
                     if (!state.processingCanceled) {
