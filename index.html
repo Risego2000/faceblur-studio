@@ -224,17 +224,33 @@
             background: var(--bg-dark);
         }
 
-        /* Immersive Fullscreen Mobile Mode (Active when video is loaded) */
-        @media (max-width: 768px) {
+        /* Immersive Fullscreen Mobile/Tablet Mode (Active when video is loaded) */
+        @media (max-width: 1024px) {
             body.video-active header {
                 display: none !important;
             }
 
-            body.video-active .workspace {
+            body.video-active .app {
                 height: 100dvh !important;
+                height: -webkit-fill-available !important;
+                overflow: hidden !important;
+                position: fixed !important;
+                inset: 0 !important;
+                width: 100vw !important;
+            }
+
+            body.video-active .workspace {
+                position: fixed !important;
+                inset: 0 !important;
+                width: 100vw !important;
+                height: 100dvh !important;
+                height: -webkit-fill-available !important;
                 padding: 0 !important;
-                background-image: none !important;
+                margin: 0 !important;
+                z-index: 10000 !important;
                 background: #000 !important;
+                display: flex !important;
+                flex-direction: column !important;
             }
 
             body.video-active .video-card {
@@ -242,19 +258,42 @@
                 margin: 0 !important;
                 border: none !important;
                 background: #000 !important;
+                flex: 1 !important;
+                height: 100% !important;
+                width: 100vw !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
             }
 
             body.video-active .video-controls {
+                position: absolute !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
                 border-radius: 0 !important;
                 padding: 12px 16px !important;
-                /* Eliminates the bottom black gap and respects iPhone home indicator */
                 padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
-                background: rgba(0, 0, 0, 0.85) !important;
-                backdrop-filter: blur(15px);
+                background: rgba(0, 0, 0, 0.9) !important;
+                backdrop-filter: blur(20px);
+                z-index: 10001 !important;
                 border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-                border-left: none !important;
-                border-right: none !important;
-                border-bottom: none !important;
+            }
+
+            body.video-active .video-canvas-wrapper {
+                flex: 1 !important;
+                height: 100% !important;
+                width: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                background: #000;
+            }
+
+            body.video-active #renderCanvas {
+                max-height: 100% !important;
+                max-width: 100% !important;
+                object-fit: contain !important;
             }
         }
 
@@ -2487,7 +2526,12 @@
             // Cancel processing / Close Modal
             elements.cancelBtn.addEventListener('click', () => {
                 if (state.isProcessing) {
+                    console.log('User requested cancellation');
                     state.processingCanceled = true;
+                    // Force immediate stop of video and hidden elements
+                    video.pause();
+                    elements.modal.classList.remove('active');
+                    state.isProcessing = false;
                 } else {
                     // Close modal if finished
                     elements.modal.classList.remove('active');
@@ -3260,9 +3304,13 @@
             elements.cancelBtn.style.display = 'block';
             elements.cancelBtn.textContent = 'Cancelar';
 
-            // Reset cancel handler
+            // Reset cancel handler: Unify logic for cancel button
             elements.cancelBtn.onclick = () => {
+                console.log('User requested cancellation');
                 state.processingCanceled = true;
+                state.isProcessing = false;
+                video.pause();
+                elements.modal.classList.remove('active');
             };
 
             const startTime = state.trimStart || 0;
@@ -3595,52 +3643,85 @@
                 recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
                 recorder.onstop = () => {
-                    const blobType = recorder.mimeType || mimeType;
-                    state.processedBlob = new Blob(chunks, { type: blobType });
+                    try {
+                        console.log('Recorder stopped successfully');
+                        const blobType = recorder.mimeType || mimeType;
+                        state.processedBlob = new Blob(chunks, { type: blobType });
 
-                    // Updating UI to Success State
-                    elements.modalTitle.textContent = '¡Video Listo!';
-                    elements.modalSubtitle.textContent = 'Selecciona una opción:';
-                    elements.modalFill.parentElement.style.display = 'none';
-                    elements.modalPercent.style.display = 'none';
-                    document.querySelector('.modal-spinner').style.display = 'none';
-                    elements.cancelBtn.textContent = 'Cerrar';
-
-                    const actions = document.getElementById('modalActions');
-                    actions.style.display = 'flex';
-
-                    // Bind Download
-                    const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
-                    document.getElementById('btnDownload').onclick = () => {
-                        const url = URL.createObjectURL(state.processedBlob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `faceanon_pro_${Date.now()}.${ext}`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 10000);
-                    };
-
-                    // Bind Share
-                    document.getElementById('btnShare').onclick = async () => {
-                        if (navigator.share) {
-                            const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
-                            try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
-                        } else {
-                            alert('Compartir no soportado en este dispositivo.');
+                        if (state.processedBlob.size === 0) {
+                            throw new Error('El video generado está vacío. Prueba con un rango menor.');
                         }
-                    };
 
-                    elements.processBtn.disabled = false;
-                    elements.exportBtn.disabled = false;
+                        // Updating UI to Success State
+                        elements.modalTitle.textContent = '¡Video Listo!';
+                        elements.modalSubtitle.textContent = 'Selecciona una opción:';
 
-                    // Reset Audio/Video for user
-                    video.muted = false;
-                    video.volume = 1.0;
-                    resolve();
+                        const fillParent = elements.modalFill.parentElement;
+                        if (fillParent) fillParent.style.display = 'none';
+                        if (elements.modalPercent) elements.modalPercent.style.display = 'none';
+
+                        const spinner = document.querySelector('.modal-spinner');
+                        if (spinner) spinner.style.display = 'none';
+
+                        elements.cancelBtn.textContent = 'Cerrar';
+
+                        const actions = document.getElementById('modalActions');
+                        if (actions) actions.style.display = 'flex';
+
+                        // Bind Download
+                        const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
+                        const dlBtn = document.getElementById('btnDownload');
+                        if (dlBtn) {
+                            dlBtn.onclick = () => {
+                                const url = URL.createObjectURL(state.processedBlob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `faceanon_pro_${Date.now()}.${ext}`;
+                                a.click();
+                                setTimeout(() => URL.revokeObjectURL(url), 10000);
+                            };
+                        }
+
+                        // Bind Share
+                        const shareBtn = document.getElementById('btnShare');
+                        if (shareBtn) {
+                            shareBtn.onclick = async () => {
+                                if (navigator.share) {
+                                    const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
+                                    try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
+                                } else {
+                                    alert('Compartir no soportado en este dispositivo.');
+                                }
+                            };
+                        }
+
+                        elements.processBtn.disabled = false;
+                        elements.exportBtn.disabled = false;
+
+                        // Reset Audio/Video for user
+                        video.muted = false;
+                        video.volume = 1.0;
+                        resolve();
+                    } catch (err) {
+                        console.error('Error finalizando video:', err);
+                        alert(err.message);
+                        elements.modal.classList.remove('active');
+                        reject(err);
+                    }
                 };
 
                 // Start
                 recorder.start();
+
+                // Safety Resolution: If recorder doesn't stop for any reason after end
+                let safetyResolved = false;
+                const forceResolve = () => {
+                    if (safetyResolved) return;
+                    safetyResolved = true;
+                    console.log('Safety Resolution triggered');
+                    if (recorder.state === 'recording') recorder.stop();
+                    resolve();
+                };
 
                 // Playback Logic
                 let analysisIndex = 0;
@@ -3659,8 +3740,13 @@
                         }
 
                         // Stop Condition
-                        if (video.currentTime >= endTime || video.paused || video.ended) {
-                            if (recorder.state === 'recording') recorder.stop();
+                        if (video.currentTime >= endTime || video.paused || video.ended || state.processingCanceled) {
+                            console.log('Export Loop: End reached or canceled');
+                            if (recorder.state === 'recording') {
+                                recorder.stop();
+                            }
+                            // Call safety resolve after a short delay if onstop hasn't fired
+                            setTimeout(forceResolve, 1500);
                             video.pause();
                             return;
                         }
