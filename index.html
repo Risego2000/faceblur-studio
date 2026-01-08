@@ -1029,11 +1029,11 @@
 
             /* Resize video viewer on mobile to 80% screen height */
             .video-card {
-                height: 80vh;
-                aspect-ratio: auto;
-                /* Allow height to dictate size */
-                max-height: 80vh;
+                height: 100%;
+                max-height: 100%;
+                border-radius: 0;
             }
+
 
             .video-container {
                 height: 100%;
@@ -1316,8 +1316,9 @@
             }
 
             .video-overlay-status {
-                /* Mobile: Centered Bottom "Module" - 20% smaller */
-                bottom: 10px;
+                /* Mobile: Fixed above controls - 20% smaller */
+                position: fixed;
+                bottom: calc(82px + env(safe-area-inset-bottom));
                 left: 50%;
                 transform: translateX(-50%);
                 width: 85%;
@@ -1326,7 +1327,9 @@
                 gap: 8px;
                 border-radius: 20px;
                 background: rgba(0, 0, 0, 0.85) !important;
+                z-index: 1100;
             }
+
 
 
 
@@ -1342,9 +1345,19 @@
 
 
             .video-controls {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 100%;
                 padding: 12px 16px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
                 gap: 12px;
+                background: rgba(10, 10, 10, 0.95) !important;
+                backdrop-filter: blur(12px);
+                border-radius: 0;
+                z-index: 1200;
             }
+
 
             .play-btn,
             .ctrl-btn {
@@ -2186,6 +2199,14 @@
             return `${m}:${s.toString().padStart(2, '0')}`;
         }
 
+        // Seek function
+        function seek(e) {
+            if (!video.duration) return;
+            const rect = elements.progressTrack.getBoundingClientRect();
+            const position = (e.clientX - rect.left) / rect.width;
+            video.currentTime = position * video.duration;
+            updateTimeDisplay();
+        }
 
         // Event Listeners
         function setupEventListeners() {
@@ -2220,11 +2241,11 @@
             elements.progressTrack.addEventListener('click', seek);
             elements.rewindBtn.addEventListener('click', () => {
                 video.currentTime = Math.max(0, video.currentTime - 1);
-                updateProgress();
+                updateTimeDisplay();
             });
             elements.forwardBtn.addEventListener('click', () => {
                 video.currentTime = Math.min(video.duration, video.currentTime + 1);
-                updateProgress();
+                updateTimeDisplay();
             });
 
             // Intensity
