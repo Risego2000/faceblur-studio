@@ -3374,13 +3374,32 @@
                 recorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
 
                 const finalizeExport = () => {
-                    if (state.processedBlob) { resolve(); return; }
+                    if (state.processedBlob) {
+                        console.log('Already finalized, skipping');
+                        resolve();
+                        return;
+                    }
+
+                    console.log(`Creating blob from ${processingChunks.length} chunks`);
+
                     try {
+                        if (processingChunks.length === 0) {
+                            reject(new Error('No hay datos de video - la grabación falló'));
+                            return;
+                        }
+
                         const blob = new Blob(processingChunks, { type: recorder.mimeType });
+                        console.log(`✓ Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+
                         state.processedBlob = blob;
                         if (stream) stream.getTracks().forEach(t => t.stop());
+
+                        console.log('✓ Export finalized successfully');
                         resolve();
-                    } catch (e) { reject(e); }
+                    } catch (e) {
+                        console.error('Finalization error:', e);
+                        reject(e);
+                    }
                 };
 
                 recorder.onstop = () => {
@@ -3573,9 +3592,22 @@
 
                     // Finalize
                     if (!state.processingCanceled) {
+                        console.log('Finalization starting...');
                         elements.modalSubtitle.textContent = 'Finalizando archivo...';
-                        if (recorder.state === 'recording') recorder.stop();
-                        setTimeout(finalizeExport, 1000);
+
+                        // Request final data from recorder
+                        if (recorder.state === 'recording') {
+                            recorder.requestData(); // Force flush of buffered data
+                            recorder.stop();
+                        }
+
+                        // Aggressive fallback - shorter timeout for faster completion
+                        setTimeout(() => {
+                            if (!state.processedBlob) {
+                                console.log('Forcing finalization via timeout');
+                                finalizeExport();
+                            }
+                        }, 500);
                     } else {
                         if (recorder.state === 'recording') recorder.stop();
                         reject(new Error('Cancelado por usuario'));
