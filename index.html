@@ -3330,6 +3330,9 @@
                     video.pause();
                     elements.modal.classList.remove('active');
                 };
+
+                const startTime = state.trimStart || 0;
+                const endTime = state.trimEnd || video.duration;
                 // PHASE 1: ANALYSIS (No Memory Crash)
                 elements.modalSubtitle.textContent = 'Fase 1/2: Analizando rostros...';
 
