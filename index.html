@@ -3746,7 +3746,13 @@
                 let analysisIndex = 0;
                 const duration = endTime - startTime;
 
+                // Time Estimation Variables
+                let renderStartRealTime = null;
+                let lastFaceCount = 0;
+
                 video.play().then(() => {
+                    renderStartRealTime = performance.now();
+
                     const drawLoop = () => {
                         if (state.processingCanceled) {
                             if (processingRecorder.state === 'recording') processingRecorder.stop();
@@ -3758,6 +3764,7 @@
                         // End condition
                         if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
                             console.log('Render Pass finished');
+                            elements.modalSubtitle.textContent = 'Finalizando y guardando archivo...';
                             if (processingRecorder.state === 'recording') processingRecorder.stop();
                             video.pause();
 
@@ -3768,7 +3775,7 @@
 
                         // Draw video frame
                         const padding = state.padding;
-                        processingCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+                        ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
                         // Find data for current frame
                         while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
@@ -3782,6 +3789,7 @@
 
                         // Apply effects
                         if (frameData && frameData.faces) {
+                            lastFaceCount = frameData.faces.length;
                             frameData.faces.forEach(face => {
                                 if (!face || face.excluded || !face.box) return;
                                 const box = face.box;
@@ -3790,19 +3798,43 @@
                                 const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
                                 const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
 
-                                if (state.effect === 'pixelate') pixelateArea(processingCtx, x, y, w, h);
-                                else if (state.effect === 'blur') blurArea(processingCtx, x, y, w, h);
-                                else solidArea(processingCtx, x, y, w, h);
+                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
+                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
+                                else solidArea(ctx, x, y, w, h);
                             });
+                        } else {
+                            lastFaceCount = 0;
                         }
 
                         // Update Progress (Phase 2: 50-100%)
-                        const renderPct = ((video.currentTime - startTime) / duration) * 50;
+                        const elapsedVideo = video.currentTime - startTime;
+                        const renderPct = (elapsedVideo / duration) * 50;
                         const totalPct = Math.min(100, 50 + Math.round(renderPct));
+
+                        // Estimate Time Remaining
+                        let etaText = '';
+                        if (renderStartRealTime && elapsedVideo > 0.5) {
+                            const elapsedRealMs = performance.now() - renderStartRealTime;
+                            const remainingVideo = duration - elapsedVideo;
+                            const msPerSec = elapsedRealMs / elapsedVideo;
+                            const etaMs = remainingVideo * msPerSec;
+
+                            if (etaMs < 60000) {
+                                etaText = ` (~${Math.ceil(etaMs / 1000)}s restantes)`;
+                            } else {
+                                const mins = Math.floor(etaMs / 60000);
+                                const secs = Math.ceil((etaMs % 60000) / 1000);
+                                etaText = ` (~${mins}m ${secs}s restantes)`;
+                            }
+                        }
+
+                        // Build Status Text
+                        const effectName = state.effect === 'pixelate' ? 'Pixelando' : (state.effect === 'blur' ? 'Difuminando' : 'Ocultando');
+                        const faceInfo = lastFaceCount > 0 ? `${effectName} ${lastFaceCount} rostro${lastFaceCount > 1 ? 's' : ''}` : 'Codificando';
 
                         elements.modalFill.style.width = totalPct + '%';
                         elements.modalPercent.textContent = totalPct + '%';
-                        elements.modalSubtitle.textContent = `Fase 2/2: Generando (${formatTime(video.currentTime)} / ${formatTime(endTime)})`;
+                        elements.modalSubtitle.textContent = `Fase 2/2: ${faceInfo} (${formatTime(video.currentTime)} / ${formatTime(endTime)})${etaText}`;
 
                         requestAnimationFrame(drawLoop);
                     };
