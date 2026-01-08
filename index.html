@@ -3274,11 +3274,44 @@
                 video.currentTime = t;
             });
 
+            // Scene Change Detection Setup
+            const scCanvas = document.createElement('canvas');
+            scCanvas.width = 48; // Small res for speed
+            scCanvas.height = 48;
+            const scCtx = scCanvas.getContext('2d', { willReadFrequently: true });
+            let lastFramePixels = null;
+
             // Loop through time
             while (currentTime < endTime) {
                 if (state.processingCanceled) break;
 
                 await seekTo(currentTime);
+
+                // Check for Scene Change (Camera Cut)
+                scCtx.drawImage(video, 0, 0, 48, 48);
+                const currentPixels = scCtx.getImageData(0, 0, 48, 48).data;
+
+                if (lastFramePixels) {
+                    let diffSum = 0;
+                    let samples = 0;
+                    // Sampling every 4th pixel (RGB)
+                    for (let i = 0; i < currentPixels.length; i += 16) {
+                        diffSum += Math.abs(currentPixels[i] - lastFramePixels[i]) +
+                            Math.abs(currentPixels[i + 1] - lastFramePixels[i + 1]) +
+                            Math.abs(currentPixels[i + 2] - lastFramePixels[i + 2]);
+                        samples++;
+                    }
+                    const avgDiff = diffSum / (samples * 3);
+
+                    // Threshold: >15 avg pixel diff indicates significant change
+                    if (avgDiff > 25) {
+                        // Camera Cut Detected! Reset persistence immediately.
+                        console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
+                        lastKnownFaces = [];
+                        persistenceCounter = 0;
+                    }
+                }
+                lastFramePixels = currentPixels;
 
                 let facesToSave = [];
                 try {
