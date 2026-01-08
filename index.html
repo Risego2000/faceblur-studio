@@ -2074,11 +2074,24 @@
         const video = document.createElement('video');
         video.muted = true;
         video.playsInline = true;
-        // Optimization for mobile: hidden instead of display:none keeps the element 'active' for some browsers
+        // Optimization for mobile: "In-View" strategy.
+        // We make it 1x1, nearly transparent, and fixed at top-left.
+        // This forces the OS to treat it as "visible" and render frames, preventing hangs during seek/detection.
         video.style.position = 'fixed';
-        video.style.top = '-10000px';
-        video.style.left = '-10000px';
-        video.style.visibility = 'hidden';
+        video.style.top = '0';
+        video.style.left = '0';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.opacity = '0.001';
+        video.style.pointerEvents = 'none';
+        video.style.zIndex = '-1000';
+        video.style.visibility = 'visible'; // Important!
+
+        // Critical Attributes for iOS
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('preload', 'auto');
+
         document.body.appendChild(video);
 
         // Processing canvas
