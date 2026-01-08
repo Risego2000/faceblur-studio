@@ -6,7 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>FaceAnon Pro</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#09090b">
+
+    <!-- Apple PWA Meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FaceAnon">
+    <link rel="apple-touch-icon" href="logo.jpg">
 
     <!-- Local Fonts -->
     <link rel="stylesheet" href="css/fonts.css">
@@ -1683,6 +1689,11 @@
                         <span>Tocar para Abrir Video</span>
                     </button>
 
+                    <button id="pwaInstallBtnMobile" class="action-btn"
+                        style="margin-top: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px 20px; border-radius: 12px; font-size: 13px; display: none; align-items: center; gap: 8px; width: 100%; max-width: 300px; justify-content: center;">
+                        <span>📲</span> Instalar como aplicación
+                    </button>
+
                     <p style="margin-top: 24px; font-size: 12px; color: rgba(255,255,255,0.3);">
                         Procesamiento 100% Local y Seguro
                     </p>
@@ -1839,6 +1850,12 @@
                                 style="width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); padding: 6px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 4px;">
                                 📁 Abrir Otro Video
                             </button>
+
+                            <!-- PWA Install inside settings -->
+                            <button id="pwaInstallBtnSettings"
+                                style="width: 100%; background: rgba(99, 102, 241, 0.1); border: 1px solid var(--primary); color: var(--primary-light); padding: 8px; border-radius: 8px; font-size: 10px; cursor: pointer; margin-top: 12px; display: none; align-items: center; justify-content: center; gap: 6px; font-weight: 700;">
+                                📲 INSTALAR APP (Sín Barras)
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1928,6 +1945,50 @@
                         console.log('SW Registration failed:', error);
                     });
             });
+        }
+
+        // PWA Installation Handler
+        let deferredPrompt;
+        const installBtnMobile = document.getElementById('pwaInstallBtnMobile');
+        const installBtnSettings = document.getElementById('pwaInstallBtnSettings');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            deferredPrompt = e;
+            // Update UI to notify the user they can add to home screen
+            if (installBtnMobile) installBtnMobile.style.display = 'flex';
+            if (installBtnSettings) installBtnSettings.style.display = 'flex';
+        });
+
+        async function handleInstallClick() {
+            if (!deferredPrompt) {
+                // FALLBACK for iOS: Inform user how to add manually
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    alert('📲 Para instalar FaceAnon en tu iPhone:\n\n1. Pulsa el botón "Compartir" (el cuadrado con flecha abajo).\n2. Selecciona "Añadir a pantalla de inicio".\n\n¡Listo! Podrás usarla sin barras de navegación.');
+                }
+                return;
+            }
+            // Show the prompt
+            deferredPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User responded to the install prompt: ${outcome}`);
+            // We've used the prompt, and can't use it again, throw it away
+            deferredPrompt = null;
+            // Hide the buttons
+            if (installBtnMobile) installBtnMobile.style.display = 'none';
+            if (installBtnSettings) installBtnSettings.style.display = 'none';
+        }
+
+        if (installBtnMobile) installBtnMobile.addEventListener('click', handleInstallClick);
+        if (installBtnSettings) installBtnSettings.addEventListener('click', handleInstallClick);
+
+        // Show install button for iOS users specifically (since they don't trigger beforeinstallprompt)
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone) {
+            if (installBtnMobile) installBtnMobile.style.display = 'flex';
+            if (installBtnSettings) installBtnSettings.style.display = 'flex';
         }
 
         // DOM Elements
@@ -3661,32 +3722,9 @@
             });
         }
 
-        // PWA Install Logic
-        let deferredPrompt;
-        const installBtn = document.getElementById('installBtn');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            if (installBtn) {
-                installBtn.style.display = 'block';
-                installBtn.addEventListener('click', async () => {
-                    installBtn.style.display = 'none';
-                    deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    console.log(`User response to the install prompt: ${outcome}`);
-                    deferredPrompt = null;
-                });
-            }
-        });
-
-        // Service Worker Registration for PWA/Local Caching
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered:', reg.scope))
-                    .catch(err => console.log('SW Fail:', err));
-            });
+        // Helper to check if PWA is already installed
+        function isPwaInstalled() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
         }
 
         // Export video
