@@ -3346,45 +3346,26 @@
 
                 const startTime = state.trimStart || 0;
                 const endTime = state.trimEnd || video.duration;
-                // CHUNKED PROCESSING (Interleaved Analysis -> Render -> Garbage Collect)
-                // This prevents memory crash on mobile by freeing data every few seconds
+                // STANDARD PROCESSING (Two Pass: Analyze All -> Render All)
+                // Reverted from chunking to ensure 100% fluid video without cuts/glitches.
+                // The previous mobile hangs are solved by the 'seek timeout' and 'visible video' fixes.
 
-                await setupRecorder();
-
-                const CHUNK_DURATION = 3.0; // 3 seconds per chunk
-                let currentChunkStart = startTime;
-
-                while (currentChunkStart < endTime && !state.processingCanceled) {
-                    const currentChunkEnd = Math.min(endTime, currentChunkStart + CHUNK_DURATION);
-
-                    // 1. Analyze Block
-                    elements.modalSubtitle.textContent = `Procesando: ${formatTime(currentChunkStart)} - ${formatTime(currentChunkEnd)}`;
-                    const chunkAnalysisData = await analyzeVideoPass(currentChunkStart, currentChunkEnd);
-
-                    if (state.processingCanceled) break;
-
-                    // 2. Render Block (Append to Recorder)
-                    await renderChunk(currentChunkStart, currentChunkEnd, chunkAnalysisData);
-
-                    // 3. Update Global Progress (0-100% Linear)
-                    const pct = Math.round(((currentChunkEnd - startTime) / (endTime - startTime)) * 100);
-                    elements.modalFill.style.width = pct + '%';
-                    elements.modalPercent.textContent = pct + '%';
-
-                    // 4. Force GC Step
-                    currentChunkStart = currentChunkEnd;
-
-                    // Small yield
-                    await new Promise(r => setTimeout(r, 10));
-                }
+                // PHASE 1: ANALYSIS
+                elements.modalSubtitle.textContent = 'Fase 1/2: Analizando rostros...';
+                analysisData = [];
+                analysisData = await analyzeVideoPass(startTime, endTime);
 
                 if (state.processingCanceled) throw new Error('Cancelado por usuario');
 
-                // Finish
-                elements.modalSubtitle.textContent = 'Finalizando video...';
-                await finishRecording();
+                // PHASE 2: RENDERING
+                elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
+                elements.modalFill.style.width = '50%'; // Start Phase 2 at 50%
+                await renderVideoPass(startTime, endTime);
 
-                // FINAL UI UPDATE (Moved here to ensure it runs when Phase 2 promise resolves)
+                // Clear memory
+                analysisData = [];
+
+                // FINAL UI UPDATE
                 if (state.processedBlob && state.processedBlob.size > 0) {
                     showExportSuccess();
                 } else if (!state.processingCanceled) {
@@ -3642,8 +3623,14 @@
                     }
                 }
 
-                // Progress is now handled in wrapper function
-                // Just yield to keep UI alive
+                // Update Progress (Phase 1: 0-50%)
+                const analysisPct = ((currentTime - startTime) / duration) * 50;
+                const totalPct = Math.min(50, Math.round(analysisPct));
+
+                elements.modalFill.style.width = totalPct + '%';
+                elements.modalPercent.textContent = totalPct + '%';
+                elements.modalSubtitle.textContent = `Fase 1/2: Analizando (${formatTime(currentTime)} / ${formatTime(endTime)})`;
+
                 currentTime += frameTime;
             }
             // Restore original attributes
@@ -3653,104 +3640,100 @@
             return data;
         }
 
-        // Global resources for chunked processing
+        // Global resources for rendering
         let processingRecorder = null;
         let processingStream = null;
         let processingChunks = [];
         let processingCanvas = null;
         let processingCtx = null;
 
-        async function setupRecorder() {
-            processingChunks = [];
-            processingCanvas = document.createElement('canvas');
-            processingCanvas.width = state.videoWidth;
-            processingCanvas.height = state.videoHeight;
-            processingCtx = processingCanvas.getContext('2d');
+        // Phase 2: Render video with effects
+        async function renderVideoPass(startTime, endTime) {
+            return new Promise(async (resolve, reject) => {
+                processingChunks = [];
+                processingCanvas = document.createElement('canvas');
+                processingCanvas.width = state.videoWidth;
+                processingCanvas.height = state.videoHeight;
+                processingCtx = processingCanvas.getContext('2d');
 
-            // Audio Setup
-            let stream = processingCanvas.captureStream(30);
-            try {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
-                    const audioCtx = window.audioCtxGlobal;
-                    if (audioCtx.state === 'suspended') await audioCtx.resume();
+                // Audio Setup
+                let stream = processingCanvas.captureStream(30);
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
+                        const audioCtx = window.audioCtxGlobal;
+                        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-                    if (!video._audioSourceNode) {
-                        try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
+                        if (!video._audioSourceNode) {
+                            try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
+                        }
+                        if (video._audioSourceNode) {
+                            const dest = audioCtx.createMediaStreamDestination();
+                            video._audioSourceNode.connect(dest);
+                            if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
+                        }
                     }
-                    if (video._audioSourceNode) {
-                        const dest = audioCtx.createMediaStreamDestination();
-                        video._audioSourceNode.connect(dest);
-                        if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
-                    }
-                }
-            } catch (e) { console.warn('Audio setup warning:', e); }
+                } catch (e) { console.warn('Audio setup warning:', e); }
 
-            processingStream = stream;
+                processingStream = stream;
 
-            let mimeType = 'video/webm;codecs=vp9,opus';
-            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
+                let mimeType = 'video/webm;codecs=vp9,opus';
+                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
 
-            processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
-            processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
+                processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
+                processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
 
-            processingRecorder.start(100); // Small slices
-            // Immediately pause. We only record during renderChunk.
-            processingRecorder.pause();
-        }
+                processingRecorder.onstop = () => {
+                    try {
+                        const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
+                        state.processedBlob = blob;
+                        if (processingStream) processingStream.getTracks().forEach(t => t.stop());
+                        resolve();
+                    } catch (e) { reject(e); }
+                };
 
-        async function renderChunk(startTime, endTime, chunkData) {
-            return new Promise((resolve, reject) => {
-                if (!processingRecorder || processingRecorder.state === 'inactive') {
-                    reject(new Error('Recorder not ready'));
-                    return;
-                }
-
-                // Resume recording for this chunk
-                if (processingRecorder.state === 'paused') processingRecorder.resume();
+                processingRecorder.start(100); // Start recording
 
                 video.currentTime = startTime;
                 video.muted = false;
                 video.volume = 1.0;
 
-                // Analysis Index for this chunk
                 let analysisIndex = 0;
+                const duration = endTime - startTime;
 
                 video.play().then(() => {
                     const drawLoop = () => {
                         if (state.processingCanceled) {
-                            if (processingRecorder.state === 'recording') processingRecorder.pause();
+                            if (processingRecorder.state === 'recording') processingRecorder.stop();
                             video.pause();
                             reject(new Error('Cancelado'));
                             return;
                         }
 
-                        // Chunk End Condition
-                        // We use a small buffer (0.05) to ensure we cover the range but don't overrun too much
+                        // End condition for the render loop
                         if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
-                            if (processingRecorder.state === 'recording') processingRecorder.pause();
+                            if (processingRecorder.state === 'recording') processingRecorder.stop();
                             video.pause();
-                            resolve();
-                            return;
+                            return; // The onstop event will resolve the promise
                         }
 
-                        // Draw
+                        // Draw video frame
                         const padding = state.padding;
                         processingCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
-                        // Find data
-                        while (analysisIndex < chunkData.length - 1 && chunkData[analysisIndex + 1].time <= video.currentTime) {
+                        // Find data for current frame
+                        while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
                             analysisIndex++;
                         }
 
                         let frameData = null;
-                        if (chunkData[analysisIndex] && Math.abs(chunkData[analysisIndex].time - video.currentTime) < 1.0) {
-                            frameData = chunkData[analysisIndex];
+                        if (analysisData[analysisIndex] && Math.abs(analysisData[analysisIndex].time - video.currentTime) < 1.0) {
+                            frameData = analysisData[analysisIndex];
                         }
 
-                        // Effects
+                        // Apply effects
                         if (frameData && frameData.faces) {
                             frameData.faces.forEach(face => {
                                 if (!face || face.excluded || !face.box) return;
@@ -3766,6 +3749,14 @@
                             });
                         }
 
+                        // Update Progress (Phase 2: 50-100%)
+                        const renderPct = ((video.currentTime - startTime) / duration) * 50;
+                        const totalPct = Math.min(100, 50 + Math.round(renderPct)); // Start at 50% for phase 2
+
+                        elements.modalFill.style.width = totalPct + '%';
+                        elements.modalPercent.textContent = totalPct + '%';
+                        elements.modalSubtitle.textContent = `Fase 2/2: Generando (${formatTime(video.currentTime)} / ${formatTime(endTime)})`;
+
                         requestAnimationFrame(drawLoop);
                     };
                     drawLoop();
@@ -3773,29 +3764,7 @@
             });
         }
 
-        async function finishRecording() {
-            return new Promise((resolve, reject) => {
-                if (!processingRecorder) { resolve(); return; }
 
-                processingRecorder.onstop = () => {
-                    try {
-                        const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
-                        state.processedBlob = blob;
-                        if (processingStream) processingStream.getTracks().forEach(t => t.stop());
-                        resolve();
-                    } catch (e) { reject(e); }
-                };
-
-                // Ensure it's stopped
-                if (processingRecorder.state !== 'inactive') processingRecorder.stop();
-                else {
-                    // Manual trigger if already inactive
-                    const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
-                    state.processedBlob = blob;
-                    resolve();
-                }
-            });
-        }
         // Helper to check if PWA is already installed
         function isPwaInstalled() {
             return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
