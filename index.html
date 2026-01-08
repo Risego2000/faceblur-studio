@@ -3740,8 +3740,9 @@
                 processingRecorder.start(100); // Start recording
 
                 video.currentTime = startTime;
-                video.muted = false;
-                video.volume = 1.0;
+                // CRITICAL: Keep video muted for iOS autoplay compatibility
+                // Audio is captured separately via AudioContext, not from the video element directly
+                video.muted = true;
 
                 let analysisIndex = 0;
                 const duration = endTime - startTime;
@@ -3750,7 +3751,12 @@
                 let renderStartRealTime = null;
                 let lastFaceCount = 0;
 
+                // Ensure playsinline for iOS
+                video.setAttribute('playsinline', '');
+                video.setAttribute('webkit-playsinline', '');
+
                 video.play().then(() => {
+                    console.log('Video playback started for render');
                     renderStartRealTime = performance.now();
 
                     const drawLoop = () => {
@@ -3839,7 +3845,10 @@
                         requestAnimationFrame(drawLoop);
                     };
                     drawLoop();
-                }).catch(reject);
+                }).catch(e => {
+                    console.error('Video play failed:', e);
+                    reject(new Error('No se pudo iniciar la reproducción del video. Intente de nuevo.'));
+                });
             });
         }
 
