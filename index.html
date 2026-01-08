@@ -3114,13 +3114,8 @@
                         // Clean connections
                         try { this.audioSource.disconnect(); } catch (e) { }
 
-                        // Connect: Source -> Delay -> Dest (Recording)
-                        // Fix: Add 150ms delay to audio to sync with video processing latency
-                        const delayNode = this.audioCtx.createDelay(1.0);
-                        delayNode.delayTime.value = 0.15; // 150ms offset (~4-5 frames)
-
-                        this.audioSource.connect(delayNode);
-                        delayNode.connect(this.audioDest);
+                        // Connect: Source -> Dest (Recording)
+                        this.audioSource.connect(this.audioDest);
 
                         // Connect: Source -> Hardware (Monitor)
                         // We connect to hardware so the logic 'flow' of audio exists, 
