@@ -3325,10 +3325,10 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = state.videoWidth;
                 canvas.height = state.videoHeight;
-                const ctx = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
-                // Audio Setup
-                let stream = canvas.captureStream(30);
+                // Audio Setup - Use manual frame capture (0fps = on-demand)
+                let stream = canvas.captureStream(0);
                 try {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     if (AudioContext) {
@@ -3374,7 +3374,7 @@
 
                 // Processing variables
                 const duration = endTime - startTime;
-                const fps = isMobile ? 15 : 20; // Adaptive  FPS
+                const fps = 30; // Fixed 30fps for smooth output
                 const frameTime = 1 / fps;
                 let currentTime = startTime;
                 const startRealTime = performance.now();
@@ -3494,6 +3494,13 @@
                             else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
                             else solidArea(ctx, x, y, w, h);
                         });
+
+                        // CRITICAL: Manually capture this frame for recording
+                        // This ensures consistent 30fps output regardless of AI processing speed
+                        const videoTrack = stream.getVideoTracks()[0];
+                        if (videoTrack && videoTrack.requestFrame) {
+                            videoTrack.requestFrame();
+                        }
 
                         // 4. UPDATE UI
                         const elapsedVideo = currentTime - startTime;
