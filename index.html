@@ -3251,8 +3251,8 @@
         async function analyzeVideoPass(startTime, endTime) {
             const data = [];
             const duration = endTime - startTime;
-            // Analysis FPS: 24 is a good balance for precision/speed
-            const fps = 24;
+            // Analysis FPS: 30 matches standard video/export rate for frame-by-frame precision
+            const fps = 30;
             const frameTime = 1 / fps;
 
             video.currentTime = startTime;
