@@ -3182,9 +3182,10 @@
                     }
                 };
 
-                // Start recording
-                this.recorder.start(500); // Small slices for memory safety
+                // Start recording manually later
+                // this.recorder.start(500); 
             }
+
 
             async processFrames(canvas, ctx) {
                 return new Promise(async (resolve, reject) => {
@@ -3196,25 +3197,42 @@
                         endTime = totalDuration;
                     }
 
-                    // Setup Playback
+                    // Setup Playback & Recording Sequence
                     this.video.currentTime = startTime;
+
+                    // Promise to wait for seek to complete
+                    await new Promise(r => {
+                        if (Math.abs(this.video.currentTime - startTime) < 0.1) {
+                            r();
+                        } else {
+                            const onSeek = () => {
+                                this.video.removeEventListener('seeked', onSeek);
+                                r();
+                            };
+                            this.video.addEventListener('seeked', onSeek);
+                        }
+                    });
+
                     this.video.volume = 1.0;
-                    this.video.muted = false; // CRITICAL: Must be unmuted for MediaElementSource capture
+                    this.video.muted = false;
 
                     // Ensure AudioContext is running
                     if (this.audioCtx && this.audioCtx.state === 'suspended') {
                         await this.audioCtx.resume();
                     }
 
+                    // CRITICAL: Start Recorder BEFORE playing to capture initial frames
+                    if (this.recorder && this.recorder.state === 'inactive') {
+                        this.recorder.start(500);
+                        console.log('⏺ Recorder started');
+                    }
+
                     try {
                         await this.video.play();
                     } catch (e) {
-                        console.error('Play failed or blocked:', e);
-                        // If blocked, we alert user (Better than silent recording)
-                        // But for now, let's trying muting just to get video moving, but warn.
-                        // Ideally, we shouldn't fail here if user triggered the click.
-                        // this.video.muted = true; // DO NOT MUTE or audio is lost
+                        console.error('Play failed:', e);
                     }
+
 
                     let activeTracks = [];
                     let nextTrackId = 1;
