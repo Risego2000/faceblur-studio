@@ -1700,8 +1700,8 @@
 
                         <!-- Model Description -->
                         <div id="modelDescription"
-                            style="font-size: 9px; color: rgba(255,255,255,0.6); text-align: center; margin-top: 4px; min-height: 24px; line-height: 1.3;">
-                            Selección automática según dispositivo
+                            style="font-size: 9px; color: rgba(255,255,255,0.7); text-align: left; margin-top: 6px; min-height: 48px; line-height: 1.4; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;">
+                            Selección automática inteligente según tu dispositivo.
                         </div>
 
                         <!-- Status Info -->
@@ -2334,10 +2334,10 @@
 
             // Model preference with descriptions
             const modelDescriptions = {
-                'auto': 'Modo inteligente: El sistema detecta tu potencia y elige el mejor balance.',
-                'ssd': 'PRO PRECISIÓN: Máxima fiabilidad. Detecta caras lejanas, perfiles y condiciones difíciles. RECOMENDADO: Para procesado final en PC.',
-                'tiny': 'SÚPER RÁPIDO: Balance ideal velocidad/precisión. Detecta caras cercanas/medias. RECOMENDADO: Uso fluido en móviles modernos.',
-                'mobile': 'ULTRA LIGERO: Bajo consumo (200KB). Ideal para hardware antiguo o batería baja. RECOMENDADO: Caras grandes frente a cámara.'
+                'auto': '<b>MODO INTELIGENTE:</b> El sistema analiza tu hardware y elige el mejor balance entre velocidad y precisión automáticamente.',
+                'ssd': '<b>MODELO SSD (PRO):</b><br>• <b>Sirve para:</b> Máxima precisión legal. Caras lejanas, perfiles y condiciones de poca luz.<br>• <b>No sirve para:</b> Móviles antiguos (mucho calor/lentitud).<br>• <b>Sugerencia:</b> Úsalo para el procesado final antes de descargar.',
+                'tiny': '<b>MODELO TINY (RÁPIDO):</b><br>• <b>Sirve para:</b> Uso diario ágil. Caras a media distancia y seguimiento estable.<br>• <b>No sirve para:</b> Vigilancia masiva con caras muy pequeñas al fondo.<br>• <b>Sugerencia:</b> La mejor opción para editar rápido en móviles modernos.',
+                'mobile': '<b>MODELO MOBILE (LIGERO):</b><br>• <b>Sirve para:</b> Ahorro de batería y fluidez total en hardware limitado o antiguo.<br>• <b>No sirve para:</b> Escenas con sujetos lejanos o movimientos muy bruscos.<br>• <b>Sugerencia:</b> Úsalo si solo necesitas tapar caras en planos cercanos.'
             };
 
             elements.modelBtns.forEach(btn => {
