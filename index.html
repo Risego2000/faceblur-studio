@@ -3676,10 +3676,15 @@
                 const chunks = [];
                 recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-                recorder.onstop = () => {
+                // Shared Finalization Logic
+                const finalizeExport = () => {
                     try {
-                        console.log('Recorder stopped successfully');
-                        elements.modalSubtitle.textContent = 'Fase 2/2: Construyendo archivo final...';
+                        if (state.processedBlob) {
+                            resolve(); // Already done
+                            return;
+                        }
+
+                        console.log('Finalizing export...');
                         const blobType = recorder.mimeType || mimeType;
                         state.processedBlob = new Blob(chunks, { type: blobType });
 
@@ -3689,7 +3694,9 @@
                         }
 
                         if (state.processedBlob.size === 0 && !state.processingCanceled) {
-                            throw new Error('El video generado está vacío. Prueba con un rango menor.');
+                            // Fallback: if empty, try to resolve anyway to avoid hanging, or throw error?
+                            // Throwing error stops the flow correctly.
+                            throw new Error('El video generado está vacío.');
                         }
 
                         state.isProcessing = false;
@@ -3700,26 +3707,32 @@
                     }
                 };
 
-                // Start with smaller slices to avoid one massive data event at the end
+                recorder.onstop = () => {
+                    console.log('Recorder stopped (event)');
+                    finalizeExport();
+                };
+
+                // Start with smaller slices (optimizes memory)
                 recorder.start(1000);
 
                 // Safety Resolution: Real Heartbeat check
                 let safetyResolved = false;
                 const forceResolve = () => {
                     if (safetyResolved) return;
+                    safetyResolved = true;
                     console.log('Safety Resolution triggered');
-                    if (recorder.state === 'recording') recorder.stop();
 
-                    // Wait for the onstop to actually produce the blob
-                    const waitAndResolve = () => {
-                        if (state.processedBlob || state.processingCanceled) {
-                            safetyResolved = true;
-                            resolve();
-                        } else {
-                            setTimeout(waitAndResolve, 500);
+                    if (recorder.state === 'recording') {
+                        recorder.stop();
+                    }
+
+                    // Force finalization if onstop doesn't fire quickly (Safari bug fix)
+                    setTimeout(() => {
+                        if (!state.processedBlob) {
+                            console.warn('Force finalizing (onstop missed)');
+                            finalizeExport();
                         }
-                    };
-                    waitAndResolve();
+                    }, 500);
                 };
 
                 // Playback Logic
