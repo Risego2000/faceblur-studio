@@ -2259,8 +2259,10 @@
 
                 // Configure Detector
                 if (loadedModel === 'ssd') {
-                    // Maximum Precision for SSD - 0.35 confidence to eliminate noise while keeping sensitivity
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 100 });
+                    // OPTIMIZED: Faster SSD with reduced false positives
+                    // Higher confidence (0.5) = fewer false detections + faster processing
+                    // Lower maxResults (50) = less computation overhead
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 50 });
                 } else if (loadedModel === 'tiny') {
                     // Optimized input size for mobile performance vs accuracy
                     const tSize = isMobile ? 320 : 512;
