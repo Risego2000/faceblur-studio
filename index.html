@@ -2039,7 +2039,7 @@
                             window.retinafaceModel = await blazeface.load({
                                 maxFaces: 100, // Detect ALL faces (high limit)
                                 iouThreshold: 0.3,
-                                scoreThreshold: 0.2 // Lower threshold for more detections
+                                scoreThreshold: 0.5 // Normal threshold to avoid false positives
                             });
                             loadedModel = 'retinaface';
                             updateModelStatus('det', 100, 'RetinaFace Listo');
@@ -2098,11 +2098,11 @@
 
                 // Configure Detector
                 if (loadedModel === 'ssd') {
-                    // Maximize recall for SSD
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15, maxResults: 100 });
+                    // Balanced High Precision
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 100 });
                 } else if (loadedModel === 'tiny') {
-                    // Initial higher resolution for tiny to catch small faces
-                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.2 });
+                    // Balanced High Precision
+                    window.faceDetector = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 });
                 } else if (loadedModel === 'retinaface') {
                     // These models use their own detectors
                     window.faceDetector = null;
