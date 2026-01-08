@@ -291,11 +291,12 @@
             gap: 12px;
             padding: 12px 16px;
             background: var(--bg-dark);
-            border: 1px solid var(--border);
+            border: none;
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s;
         }
+
 
         .mode-option:hover {
             background: var(--bg-hover);
@@ -751,7 +752,7 @@
 
         .modal {
             background: var(--bg-card);
-            border: 1px solid var(--border);
+            border: none;
             border-radius: 24px;
             padding: 40px;
             text-align: center;
@@ -759,6 +760,7 @@
             width: 100%;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
+
 
         .modal-spinner {
             width: 56px;
@@ -858,11 +860,11 @@
             .sidebar {
                 width: 320px;
                 height: calc(100vh - 55px);
-                border-bottom: none;
-                border-right: 1px solid var(--border);
+                border-right: none;
                 overflow-y: auto;
                 flex-shrink: 0;
             }
+
 
             .workspace {
                 padding: 48px;
@@ -1252,20 +1254,7 @@
             /* Overlay styles continue... */
         }
 
-        /* Mobile Adjustments (Centering only on mobile) */
-        @media (max-width: 768px) {
-            .video-overlay-status {
-                bottom: 12px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 94%;
-                max-width: 400px;
-                padding: 12px;
-                border-radius: 24px;
-                background: rgba(0, 0, 0, 0.50) !important;
-                /* 50% Translucent */
-            }
-        }
+
 
         .overlay-btn {
             background: transparent;
@@ -1327,19 +1316,18 @@
             }
 
             .video-overlay-status {
-                /* Mobile: Centered Bottom "Module" */
-                bottom: 12px;
+                /* Mobile: Centered Bottom "Module" - 20% smaller */
+                bottom: 10px;
                 left: 50%;
                 transform: translateX(-50%);
-                /* Re-apply centering for mobile */
-                width: 94%;
-                max-width: 400px;
-                padding: 12px;
-                gap: 10px;
-                border-radius: 24px;
-                background: rgba(0, 0, 0, 0.9);
-                /* Slightly darker for mobile readability */
+                width: 85%;
+                max-width: 320px;
+                padding: 10px;
+                gap: 8px;
+                border-radius: 20px;
+                background: rgba(0, 0, 0, 0.85) !important;
             }
+
 
 
             .overlay-controls {
@@ -1348,9 +1336,10 @@
             }
 
             .overlay-btn {
-                padding: 6px 10px;
-                font-size: 10px;
+                padding: 5px 8px;
+                font-size: 9px;
             }
+
 
             .video-controls {
                 padding: 12px 16px;
@@ -2100,30 +2089,103 @@
 
                 if (elements.videoContainer) elements.videoContainer.classList.add('active');
 
-                // Force multiple renders to ensure frame is captured
-                const forceRender = () => {
-                    if (typeof renderFrame === 'function') renderFrame();
-                };
-
-                requestAnimationFrame(forceRender);
-                setTimeout(forceRender, 100);
-                setTimeout(forceRender, 500);
+                // Force initial renders
+                renderFrame();
 
                 setTimeout(() => {
                     if (elements.videoLoader) elements.videoLoader.classList.remove('active');
                 }, 600);
 
                 if (typeof updateTimeDisplay === 'function') updateTimeDisplay();
-
                 if (elements.processBtn) elements.processBtn.disabled = !state.modelReady;
             };
 
             video.onerror = () => {
                 alert('Error al cargar el video.');
-                if (elements.uploadArea) elements.uploadArea.style.display = 'block';
-                if (elements.videoLoader) elements.videoLoader.classList.remove('active');
             };
         }
+
+        // --- CORE PLAYBACK & PREVIEW LOOP ---
+        let previewParams = {
+            animationId: null
+        };
+
+        function togglePlay() {
+            if (video.paused) {
+                if (video.ended || video.currentTime >= video.duration) video.currentTime = 0;
+                video.play().then(() => {
+                    state.isPlaying = true;
+                    elements.playBtn.textContent = '⏸';
+                    startPreviewLoop();
+                });
+            } else {
+                video.pause();
+                state.isPlaying = false;
+                elements.playBtn.textContent = '▶';
+                stopPreviewLoop();
+            }
+        }
+
+        function startPreviewLoop() {
+            if (previewParams.animationId) cancelAnimationFrame(previewParams.animationId);
+
+            function loop() {
+                if (video.paused || video.ended) {
+                    state.isPlaying = false;
+                    elements.playBtn.textContent = '▶';
+                    return;
+                }
+
+                // 1. Render Video Frame
+                if (video.readyState >= 2) {
+                    renderFrame();
+                }
+
+                // 2. Continuous Background Detection
+                if (!state.isProcessing && state.modelReady) {
+                    runBackgroundDetection();
+                }
+
+                // 3. Update Progress UI
+                updateTimeDisplay();
+
+                previewParams.animationId = requestAnimationFrame(loop);
+            }
+            previewParams.animationId = requestAnimationFrame(loop);
+        }
+
+        function stopPreviewLoop() {
+            if (previewParams.animationId) {
+                cancelAnimationFrame(previewParams.animationId);
+                previewParams.animationId = null;
+            }
+        }
+
+        function renderFrame() {
+            if (!state.videoWidth) return;
+            try {
+                // Draw original
+                elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+                // Draw effects using last known tracks
+                drawCachedEffects(true);
+            } catch (e) {
+                console.error('Render error:', e);
+            }
+        }
+
+        function updateTimeDisplay() {
+            const percent = (video.currentTime / video.duration) * 100;
+            elements.progressFill.style.width = `${percent}%`;
+            elements.timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+        }
+
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
 
         // Event Listeners
         function setupEventListeners() {
@@ -2333,7 +2395,7 @@
 
             // Reset Trim when loading new video (handled in resetAppState)
 
-            video.addEventListener('timeupdate', updateProgress);
+            video.addEventListener('timeupdate', updateTimeDisplay);
 
             // Video ended - Stop detection loop
             video.addEventListener('ended', () => {
@@ -2347,7 +2409,7 @@
             video.addEventListener('seeked', () => {
                 resetTracking(); // Reset tracking history on seek
                 if (video.paused && state.modelReady && !state.isProcessing) {
-                    applyEffects();
+                    renderFrame();
                 }
             });
 
@@ -2509,110 +2571,13 @@
             console.log('App state reset for new video');
         }
 
-        // Playback controls
-        function togglePlay() {
-            if (video.paused) {
-                // If video ended, restart from beginning
-                if (video.ended || video.currentTime >= video.duration) {
-                    video.currentTime = 0;
-                }
-
-                resetTracking(); // Reset tracking on play start
-                video.play();
-                state.isPlaying = true;
-                elements.playBtn.textContent = '⏸';
-                startPreviewLoop();
-            } else {
-                video.pause();
-                state.isPlaying = false;
-                elements.playBtn.textContent = '▶';
-                stopPreviewLoop();
-            }
-        }
-
-        function updateProgress() {
-            const progress = (video.currentTime / video.duration) * 100;
-            elements.progressFill.style.width = progress + '%';
-            updateTimeDisplay();
-        }
-
-        function updateTimeDisplay() {
-            const current = formatTime(video.currentTime);
-            const total = formatTime(video.duration || 0);
-            elements.timeDisplay.textContent = `${current} / ${total}`;
-        }
-
-        function seek(e) {
-            const rect = elements.progressTrack.getBoundingClientRect();
-            const position = (e.clientX - rect.left) / rect.width;
-            video.currentTime = position * video.duration;
-        }
-
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m}:${s.toString().padStart(2, '0')}`;
-        }
-
-        // Preview loop
-        let previewRequestId = null;
-
-        function startPreviewLoop() {
-            let lastTime = 0;
-            const updateInterval = 0; // Force frame-by-frame update everywhere as requested
-
-            function loop(timestamp) {
-                if (!state.isPlaying) return;
-
-                if (!timestamp) timestamp = performance.now();
-
-                if (timestamp - lastTime >= updateInterval) {
-                    renderFrame();
-                    lastTime = timestamp;
-                }
-                previewRequestId = requestAnimationFrame(loop);
-            }
-            previewRequestId = requestAnimationFrame(loop);
-        }
-
-        function stopPreviewLoop() {
-            if (previewRequestId) {
-                cancelAnimationFrame(previewRequestId);
-                previewRequestId = null;
-            }
-        }
-
-        // Render frame
-        function renderFrame() {
-            if (!state.videoWidth) return;
-
-            try {
-                // 1. Draw original video
-                elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
-
-                // 2. Continuous Background Detection (async, doesn't block rendering)
-                // Run detection when playing OR when video is loaded and ready
-                if ((state.isPlaying || state.videoWidth > 0) && !state.isProcessing) {
-                    runBackgroundDetection();
-                }
-
-                // 3. ALWAYS draw effects if we have cached faces and we're in effects mode
-                // This ensures NO frames are skipped, even while detection is running
-                // 3. ALWAYS draw effects if we have cached faces and we're in effects mode
-                // This ensures NO frames are skipped, even while detection is running
-                if (!state.isProcessing) {
-                    // Always draw effects using last known detections
-                    drawCachedEffects(); // Draw everything (effects + highlights)
-                }
-            } catch (e) {
-                console.error('Render error:', e);
-            }
-        }
-
         let isDetecting = false;
         let lastDetectionTime = 0;
-        let detectStartTime = 0; // Watchdog timer
-        const DETECTION_INTERVAL = isMobile ? 60 : 30; // 60ms mobile (~15fps), 30ms desktop (~30fps) for fluid playback
+        let detectStartTime = 0;
+        const DETECTION_INTERVAL = isMobile ? 60 : 30;
+
+
+
 
         async function runBackgroundDetection() {
             // Watchdog: If detection takes > 2s, force reset
@@ -2926,111 +2891,9 @@
             });
         }
 
-        // Apply effects (used mainly for paused/immediate updates)
-        async function applyEffects() {
-            if (isDetecting || !state.modelReady) return;
 
-            // 1. Draw Updated Video Frame First!
-            if (state.videoWidth) {
-                elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
-            }
 
-            // 2. Detect & Draw
-            await runBackgroundDetection();
-            drawCachedEffects();
-        }
 
-        function filterFaces(detections) {
-            if (!detections) return [];
-            return detections.filter(d => {
-                const score = (d.detection && d.detection.score) ? d.detection.score : 0.5;
-                const box = (d.detection && d.detection.box) ? d.detection.box : null;
-                if (!box) return false;
-                // Minimum size to avoid noise
-                const minDim = Math.min(video.videoWidth, video.videoHeight) * 0.005;
-                // Threshold: Ultra precision requires higher confidence for SSD
-                const minScore = state.detectorType === 'ssd' ? 0.4 : 0.25;
-                return score > minScore && box.width > minDim && box.height > minDim;
-            });
-        }
-
-        // --- PREVIEW & PLAYBACK LOGIC ---
-        let previewParams = {
-            animationId: null,
-            lastFrameTime: 0
-        };
-
-        function playVideo() {
-            if (!video.src) return;
-            video.play().then(() => {
-                state.isPlaying = true;
-                elements.playBtn.textContent = '⏸';
-                elements.videoContainer.classList.add('playing');
-                startPreviewLoop();
-            }).catch(e => console.error("Error playing:", e));
-        }
-
-        function pauseVideo() {
-            video.pause();
-            state.isPlaying = false;
-            elements.playBtn.textContent = '▶';
-            elements.videoContainer.classList.remove('playing');
-            stopPreviewLoop();
-        }
-
-        function togglePlay() {
-            if (video.paused) playVideo();
-            else pauseVideo();
-        }
-
-        function startPreviewLoop() {
-            if (previewParams.animationId) cancelAnimationFrame(previewParams.animationId);
-
-            function loop() {
-                if (video.paused || video.ended) {
-                    state.isPlaying = false;
-                    elements.playBtn.textContent = '▶';
-                    return;
-                }
-
-                // Draw video frame
-                if (video.readyState >= 2) {
-                    elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
-                }
-
-                // Background detection (throttled internally)
-                runBackgroundDetection();
-
-                // Draw effects (using latest detection + smoothing)
-                drawCachedEffects(true);
-
-                // Update UI
-                updateProgressUI();
-
-                previewParams.animationId = requestAnimationFrame(loop);
-            }
-            previewParams.animationId = requestAnimationFrame(loop);
-        }
-
-        function stopPreviewLoop() {
-            if (previewParams.animationId) {
-                cancelAnimationFrame(previewParams.animationId);
-                previewParams.animationId = null;
-            }
-        }
-
-        function updateProgressUI() {
-            const percent = (video.currentTime / video.duration) * 100;
-            elements.progressFill.style.width = `${percent}%`;
-            elements.timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
-        }
-
-        function formatTime(seconds) {
-            if (!seconds || isNaN(seconds)) return "0:00";
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m}:${s.toString().padStart(2, '0')}`;
-        }
 
         const fxCanvas = document.createElement('canvas');
         const fxCtx = fxCanvas.getContext('2d');
@@ -3634,36 +3497,7 @@
             a.click();
         }
 
-        // Reset app
-        function resetApp() {
-            video.pause();
-            stopPreviewLoop();
 
-            if (state.videoBlobUrl) {
-                URL.revokeObjectURL(state.videoBlobUrl);
-            }
-
-            state.videoBlobUrl = null;
-            state.processedBlob = null;
-            state.isPlaying = false;
-            state.videoWidth = 0;
-            state.videoHeight = 0;
-            state.knownFaces = [];
-            state.lastKnownFaces = [];
-            state.smoothedBoxes = {};
-            if (elements.peopleList) {
-                elements.peopleList.innerHTML = '<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Reproduce el vídeo para listar personas...</p>';
-            }
-
-            elements.uploadArea.style.display = 'block';
-            elements.videoContainer.classList.remove('active');
-            elements.exportBtn.disabled = true;
-            elements.processBtn.disabled = true;
-            elements.fileInput.value = '';
-            elements.progressFill.style.width = '0%';
-            elements.timeDisplay.textContent = '0:00 / 0:00';
-            elements.playBtn.textContent = '▶';
-        }
 
         // Start app
         init();
