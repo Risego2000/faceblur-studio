@@ -3414,10 +3414,9 @@
                     while (currentTime < endTime && !state.processingCanceled) {
                         // Check if we need a GC pause (every 5 seconds)
                         if (currentTime - blockStartTime >= BLOCK_DURATION) {
-                            // Yield to main thread for garbage collection
-                            await new Promise(r => setTimeout(r, 100));
+                            // Yield to main thread for garbage collection (50ms optimization)
+                            await new Promise(r => setTimeout(r, 50));
                             blockStartTime = currentTime;
-                            console.log(`GC pause at ${formatTime(currentTime)}`);
                         }
 
                         await seekTo(currentTime);
@@ -3494,20 +3493,34 @@
                         activeTracks = activeTracks.filter(t => t.lastSeen < MAX_PERSISTENCE);
 
                         // 3. RENDER WITH EFFECTS
-                        const padding = state.padding;
+                        // CRITICAL: Always draw video first (even if no faces detected)
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
+                        // Apply effects to detected/tracked faces
+                        const padding = state.padding;
                         activeTracks.forEach(track => {
+                            if (!track || !track.box) return; // Safety check
+
                             const box = track.box;
-                            const smoothed = smoothBoundingBox({ detection: { box } });
+                            // Use box directly if smoothBoundingBox fails
+                            let smoothed;
+                            try {
+                                smoothed = smoothBoundingBox({ detection: { box } }) || box;
+                            } catch (e) {
+                                smoothed = box;
+                            }
+
                             const x = Math.max(0, smoothed.x - (smoothed.width * padding));
                             const y = Math.max(0, smoothed.y - (smoothed.height * padding));
                             const w = Math.min(state.videoWidth - x, smoothed.width * (1 + padding * 2));
                             const h = Math.min(state.videoHeight - y, smoothed.height * (1 + padding * 2));
 
-                            if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
-                            else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
-                            else solidArea(ctx, x, y, w, h);
+                            if (w > 0 && h > 0) {
+                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
+                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
+                                else solidArea(ctx, x, y, w, h);
+                            }
                         });
 
                         // 4. UPDATE UI
