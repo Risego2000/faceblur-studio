@@ -3260,7 +3260,84 @@
             });
         }
 
-        // Dedicated off-screen canvas for effects (re-used to save memory/GC)
+        // --- PREVIEW & PLAYBACK LOGIC ---
+        let previewParams = {
+            animationId: null,
+            lastFrameTime: 0
+        };
+
+        function playVideo() {
+            if (!video.src) return;
+            video.play().then(() => {
+                state.isPlaying = true;
+                elements.playBtn.textContent = '⏸';
+                elements.videoContainer.classList.add('playing');
+                startPreviewLoop();
+            }).catch(e => console.error("Error playing:", e));
+        }
+
+        function pauseVideo() {
+            video.pause();
+            state.isPlaying = false;
+            elements.playBtn.textContent = '▶';
+            elements.videoContainer.classList.remove('playing');
+            stopPreviewLoop();
+        }
+
+        function togglePlay() {
+            if (video.paused) playVideo();
+            else pauseVideo();
+        }
+
+        function startPreviewLoop() {
+            if (previewParams.animationId) cancelAnimationFrame(previewParams.animationId);
+
+            function loop() {
+                if (video.paused || video.ended) {
+                    state.isPlaying = false;
+                    elements.playBtn.textContent = '▶';
+                    return;
+                }
+
+                // Draw video frame
+                if (video.readyState >= 2) {
+                    elements.renderCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+                }
+
+                // Background detection (throttled internally)
+                runBackgroundDetection();
+
+                // Draw effects (using latest detection + smoothing)
+                drawCachedEffects(true);
+
+                // Update UI
+                updateProgressUI();
+
+                previewParams.animationId = requestAnimationFrame(loop);
+            }
+            previewParams.animationId = requestAnimationFrame(loop);
+        }
+
+        function stopPreviewLoop() {
+            if (previewParams.animationId) {
+                cancelAnimationFrame(previewParams.animationId);
+                previewParams.animationId = null;
+            }
+        }
+
+        function updateProgressUI() {
+            const percent = (video.currentTime / video.duration) * 100;
+            elements.progressFill.style.width = `${percent}%`;
+            elements.timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+        }
+
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
         const fxCanvas = document.createElement('canvas');
         const fxCtx = fxCanvas.getContext('2d');
 
@@ -3313,319 +3390,11 @@
             ctx.fillRect(x, y, w, h);
         }
 
-        // Process video
-        // Global for Analysis Data to save memory
-        let analysisData = [];
+        //
+        //
+        //
 
-        // SINGLE-PASS VIDEO PROCESSING
-        // Combines analysis and rendering in one frame-by-frame loop for mobile stability
-
-        async function analyzeAndRenderVideoPass(startTime, endTime) {
-            return new Promise(async (resolve, reject) => {
-                // Setup canvas and recorder
-                processingChunks = [];
-                const canvas = document.createElement('canvas');
-                canvas.width = state.videoWidth;
-                canvas.height = state.videoHeight;
-                const ctx = canvas.getContext('2d', { willReadFrequently: false });
-
-                // Audio Setup - Use 30fps for mobile compatibility
-                let stream = canvas.captureStream(30);
-                try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        // Use or create audio context
-                        if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
-                        const audioCtx = window.audioCtxGlobal;
-                        if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-                        // Create or reuse audio source
-                        let audioSource = video._audioSourceNode;
-                        if (!audioSource) {
-                            try {
-                                audioSource = audioCtx.createMediaElementSource(video);
-                                video._audioSourceNode = audioSource;
-                                console.log('✓ Created new audio source');
-                            } catch (e) {
-                                console.warn('Could not create audio source:', e);
-                            }
-                        }
-
-                        // Connect audio to recording stream
-                        if (audioSource) {
-                            const dest = audioCtx.createMediaStreamDestination();
-                            audioSource.connect(dest);
-                            audioSource.connect(audioCtx.destination); // Also to speakers
-
-                            if (dest.stream.getAudioTracks().length > 0) {
-                                stream.addTrack(dest.stream.getAudioTracks()[0]);
-                                console.log('✓ Audio track added to stream');
-                            }
-                        }
-                    }
-                } catch (e) { console.warn('Audio setup warning:', e); }
-
-                // Setup MediaRecorder
-                let mimeType = 'video/webm;codecs=vp9,opus';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
-
-                const recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
-                recorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
-
-                const finalizeExport = () => {
-                    if (state.processedBlob) {
-                        console.log('Already finalized, skipping');
-                        resolve();
-                        return;
-                    }
-
-                    console.log(`Creating blob from ${processingChunks.length} chunks`);
-
-                    try {
-                        if (processingChunks.length === 0) {
-                            reject(new Error('No hay datos de video - la grabación falló'));
-                            return;
-                        }
-
-                        const blob = new Blob(processingChunks, { type: recorder.mimeType });
-                        console.log(`✓ Blob created: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
-
-                        state.processedBlob = blob;
-                        if (stream) stream.getTracks().forEach(t => t.stop());
-
-                        console.log('✓ Export finalized successfully');
-                        resolve();
-                    } catch (e) {
-                        console.error('Finalization error:', e);
-                        reject(e);
-                    }
-                };
-
-                recorder.onstop = () => {
-                    console.log('Recording stopped');
-                    finalizeExport();
-                };
-
-                recorder.start(100);
-
-                // Processing variables
-                const duration = endTime - startTime;
-                const fps = 30; // Fixed 30fps for smooth output
-                const frameTime = 1 / fps;
-                let currentTime = startTime;
-                const startRealTime = performance.now();
-
-                // BLOCK PROCESSING for memory management
-                const BLOCK_DURATION = 5.0; // Process in 5-second blocks
-                let blockStartTime = startTime;
-
-                // Tracking state
-                let activeTracks = [];
-                let nextTrackId = 1;
-                const MAX_PERSISTENCE = 60;
-
-                // Seek helper
-                const seekTo = (t) => new Promise(resolve => {
-                    if (Math.abs(video.currentTime - t) < 0.01) {
-                        resolve();
-                        return;
-                    }
-                    let resolved = false;
-                    const finish = () => {
-                        if (resolved) return;
-                        resolved = true;
-                        video.removeEventListener('seeked', finish);
-                        resolve();
-                    };
-                    setTimeout(finish, 100);
-                    video.addEventListener('seeked', finish, { once: true });
-                    video.currentTime = t;
-                });
-
-                // Main processing loop with block GC
-                try {
-                    while (currentTime < endTime && !state.processingCanceled) {
-                        // Check if we need a GC pause (every 5 seconds)
-                        if (currentTime - blockStartTime >= BLOCK_DURATION) {
-                            // Yield to main thread for garbage collection (50ms optimization)
-                            await new Promise(r => setTimeout(r, 50));
-                            blockStartTime = currentTime;
-                        }
-
-                        await seekTo(currentTime);
-
-                        // 1. DETECT FACES
-                        let detections = [];
-                        try {
-                            if (state.detectorType === 'mobile' && window.blazeDetector) {
-                                const predictions = await window.blazeDetector.estimateFaces(video, false, false, false);
-                                detections = predictions.map(pred => ({
-                                    detection: {
-                                        box: {
-                                            x: pred.topLeft[0],
-                                            y: pred.topLeft[1],
-                                            width: pred.bottomRight[0] - pred.topLeft[0],
-                                            height: pred.bottomRight[1] - pred.topLeft[1]
-                                        },
-                                        score: pred.probability ? pred.probability[0] : 0.9
-                                    },
-                                    identity: null
-                                }));
-                            } else if (window.faceDetector) {
-                                detections = await faceapi.detectAllFaces(video, window.faceDetector);
-                                detections = detections.map(d => ({ detection: d, identity: null }));
-                            }
-                        } catch (e) {
-                            // Silent fail for detection errors to keep video smooth
-                        }
-
-                        let faces = filterFaces(detections);
-
-                        // 2. TRACK FACES
-                        const usedDetections = new Set();
-                        activeTracks.forEach(track => {
-                            let bestMatch = null;
-                            let maxIoU = 0.3;
-                            faces.forEach((face, idx) => {
-                                if (usedDetections.has(idx)) return;
-                                const dBox = face.detection.box;
-                                const xA = Math.max(track.box.x, dBox.x);
-                                const yA = Math.max(track.box.y, dBox.y);
-                                const xB = Math.min(track.box.x + track.box.width, dBox.x + dBox.width);
-                                const yB = Math.min(track.box.y + track.box.height, dBox.y + dBox.height);
-                                const interW = Math.max(0, xB - xA);
-                                const interH = Math.max(0, yB - yA);
-                                const interArea = interW * interH;
-                                const unionArea = (track.box.width * track.box.height) + (dBox.width * dBox.height) - interArea;
-                                const iou = interArea / unionArea;
-                                if (iou > maxIoU) {
-                                    maxIoU = iou;
-                                    bestMatch = { face, idx };
-                                }
-                            });
-                            if (bestMatch) {
-                                track.box = bestMatch.face.detection.box;
-                                track.lastSeen = 0;
-                                usedDetections.add(bestMatch.idx);
-                            } else {
-                                track.lastSeen++;
-                            }
-                        });
-
-                        faces.forEach((face, idx) => {
-                            if (!usedDetections.has(idx)) {
-                                activeTracks.push({
-                                    id: nextTrackId++,
-                                    box: face.detection.box,
-                                    lastSeen: 0,
-                                    excluded: false
-                                });
-                            }
-                        });
-
-                        activeTracks = activeTracks.filter(t => t.lastSeen < MAX_PERSISTENCE);
-
-                        // 3. RENDER WITH EFFECTS
-                        // CRITICAL: Always draw video first (even if no faces detected)
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
-
-                        // Apply effects to detected/tracked faces
-                        const padding = state.padding;
-                        activeTracks.forEach(track => {
-                            if (!track || !track.box) return; // Safety check
-
-                            const box = track.box;
-                            // Use box directly if smoothBoundingBox fails
-                            let smoothed;
-                            try {
-                                smoothed = smoothBoundingBox({ detection: { box } }) || box;
-                            } catch (e) {
-                                smoothed = box;
-                            }
-
-                            const x = Math.max(0, smoothed.x - (smoothed.width * padding));
-                            const y = Math.max(0, smoothed.y - (smoothed.height * padding));
-                            const w = Math.min(state.videoWidth - x, smoothed.width * (1 + padding * 2));
-                            const h = Math.min(state.videoHeight - y, smoothed.height * (1 + padding * 2));
-
-                            if (w > 0 && h > 0) {
-                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
-                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
-                                else solidArea(ctx, x, y, w, h);
-                            }
-                        });
-
-                        // 4. UPDATE UI
-                        const elapsedVideo = currentTime - startTime;
-                        const progress = Math.round((elapsedVideo / duration) * 100);
-
-                        let etaText = '';
-                        if (elapsedVideo > 1) {
-                            const elapsedReal = performance.now() - startRealTime;
-                            const remaining = duration - elapsedVideo;
-                            const eta = (remaining / elapsedVideo) * elapsedReal;
-                            if (eta < 60000) {
-                                etaText = ` (~${Math.ceil(eta / 1000)}s)`;
-                            } else {
-                                etaText = ` (~${Math.floor(eta / 60000)}m ${Math.ceil((eta % 60000) / 1000)}s)`;
-                            }
-                        }
-
-                        const effectName = state.effect === 'pixelate' ? 'Pixelando' : (state.effect === 'blur' ? 'Difuminando' : 'Ocultando');
-                        const statusText = activeTracks.length > 0
-                            ? `${effectName} ${activeTracks.length} rostro${activeTracks.length > 1 ? 's' : ''}`
-                            : 'Codificando';
-
-                        elements.modalFill.style.width = progress + '%';
-                        elements.modalPercent.textContent = progress + '%';
-                        elements.modalSubtitle.textContent = `${statusText} (${formatTime(currentTime)} / ${formatTime(endTime)})${etaText}`;
-
-                        currentTime += frameTime;
-                    }
-
-                    // Log final frame count for verification
-                    const expectedFrames = Math.round(duration * fps);
-                    const actualFrames = Math.round((currentTime - startTime) / frameTime);
-                    console.log(`Processed ${actualFrames} frames (expected ${expectedFrames}) for ${duration.toFixed(1)}s video at ${fps}fps`);
-
-                    // Finalize
-                    if (!state.processingCanceled) {
-                        console.log('Finalization starting...');
-                        elements.modalSubtitle.textContent = 'Finalizando archivo...';
-
-                        // Request final data from recorder
-                        if (recorder.state === 'recording') {
-                            recorder.requestData(); // Force flush of buffered data
-                            recorder.stop();
-                        }
-
-                        // Aggressive fallback - shorter timeout for faster completion
-                        setTimeout(() => {
-                            if (!state.processedBlob) {
-                                console.log('Forcing finalization via timeout');
-                                finalizeExport();
-                            }
-                        }, 500);
-                    } else {
-                        if (recorder.state === 'recording') recorder.stop();
-                        reject(new Error('Cancelado por usuario'));
-                    }
-                } catch (e) {
-                    console.error('Processing error:', e);
-                    if (recorder.state === 'recording') recorder.stop();
-                    reject(e);
-                }
-            });
-        }
-
-
-        // Main Process Function - Two Pass System (Analyze -> Render)
-        // Main Process Function - Two Pass System (Analyze -> Render)
-        // Main Process Function - Two Pass System (Analyze -> Render)
-        // NEW VIDEO PROCESSING SYSTEM (v2.0)
-        // Robust, Object-Oriented, Mobile-First
+        //
         class VideoExportManager {
             constructor(videoElement, state, uiElements) {
                 this.video = videoElement;
