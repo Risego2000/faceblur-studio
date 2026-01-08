@@ -3221,14 +3221,13 @@
                         await this.audioCtx.resume();
                     }
 
-                    // CRITICAL: Start Recorder BEFORE playing to capture initial frames
-                    if (this.recorder && this.recorder.state === 'inactive') {
-                        this.recorder.start(500);
-                        console.log('⏺ Recorder started');
-                    }
-
                     try {
                         await this.video.play();
+                        // CRITICAL: Start Recorder AFTER playing to avoid recording initial silence/latency
+                        if (this.recorder && this.recorder.state === 'inactive') {
+                            this.recorder.start(500);
+                            console.log('⏺ Recorder started (Synced after play)');
+                        }
                     } catch (e) {
                         console.error('Play failed:', e);
                     }
