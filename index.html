@@ -1306,6 +1306,10 @@
 
             .workspace {
                 padding: 0;
+                margin: 0;
+                height: 100vh;
+                height: 100dvh;
+                overflow: hidden;
             }
 
             .upload-area {
@@ -1314,6 +1318,43 @@
                 max-width: calc(100% - 40px);
                 border-width: 1px;
             }
+
+            /* Force video container to absolute full screen */
+            #videoContainer.active {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1000;
+                background: #000;
+            }
+
+            .video-card {
+                height: 100%;
+                width: 100%;
+                max-height: none;
+                border-radius: 0;
+                margin: 0;
+                background: #000;
+            }
+
+            .video-canvas-wrapper {
+                height: 100%;
+                width: 100%;
+                background: #000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                /* Ensures video is fully visible but maximized */
+            }
+
 
             .video-overlay-status {
                 /* Mobile: Fixed above controls - 20% smaller */
