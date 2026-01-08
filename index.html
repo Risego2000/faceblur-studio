@@ -17,13 +17,15 @@
     <!-- Local Fonts -->
     <link rel="stylesheet" href="css/fonts.css">
 
-    <!-- Face-API Library -->
+    <!-- Face-API Library (Includes TensorFlow.js) -->
     <script src="js/face-api.js"></script>
+    <script>
+        // Expose face-api's internal TensorFlow instance for other models (BlazeFace)
+        // This prevents double-loading TFJS and fixes backend registration warnings
+        window.tf = faceapi.tf;
+    </script>
 
-    <!-- TensorFlow.js core handles WebGL for BlazeFace -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.15.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0"></script>
+    <!-- BlazeFace (Uses the shared tf instance) -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
 
 
@@ -3530,20 +3532,34 @@
             }
 
             async processFrames(canvas, ctx) {
-                const duration = this.video.duration;
+                const totalDuration = this.video.duration;
+                // Determine processing range
+                const startTime = this.state.trimStart || 0;
+                let endTime = this.state.trimEnd;
+
+                // Validate endTime
+                if (endTime === null || endTime === undefined || endTime > totalDuration || endTime <= startTime) {
+                    endTime = totalDuration;
+                }
+
+                // Calculate actual duration to process
+                const processDuration = endTime - startTime;
+
                 // Fixed step 30fps
                 const fps = 30;
                 const frameTime = 1 / fps;
-                let currentTime = 0;
+
+                // Start at trimmed start time
+                let currentTime = startTime;
 
                 // Trackers
-                this.video.currentTime = 0;
+                this.video.currentTime = startTime;
                 let activeTracks = [];
                 let nextTrackId = 1;
 
-                console.log(`Starting loop: ${duration}s @ ${fps}fps`);
+                console.log(`Starting loop: ${processDuration.toFixed(2)}s (${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s) @ ${fps}fps`);
 
-                while (currentTime < duration) {
+                while (currentTime < endTime) {
                     if (this.canceled) throw new Error('Canceled');
 
                     // 1. Seek
@@ -3557,7 +3573,7 @@
                         try {
                             const faces = await this.detectFaces(canvas);
                             activeTracks = this.updateTracks(activeTracks, faces, nextTrackId);
-                            // Update ID counter if needed (logic simplified for brevity)
+                            // Update ID counter if needed
                             if (activeTracks.length > 0) nextTrackId = Math.max(...activeTracks.map(t => t.id)) + 1;
                         } catch (e) { console.warn('Detection error:', e); }
                     }
@@ -3566,13 +3582,13 @@
                     this.renderEffects(ctx, activeTracks);
 
                     // 5. Update UI
-                    this.updateProgress(currentTime, duration, activeTracks.length);
+                    this.updateProgress(currentTime, startTime, endTime, activeTracks.length);
 
                     // 6. Memory & Loop Control
                     currentTime += frameTime;
 
                     // GC Pause every 3 seconds
-                    if (Math.floor(currentTime) % 3 === 0 && Math.abs(currentTime % 1) < 0.1) {
+                    if ((currentTime - startTime) > 0 && Math.floor(currentTime - startTime) % 3 === 0 && Math.abs((currentTime - startTime) % 1) < 0.1) {
                         await new Promise(r => setTimeout(r, 20));
                     }
                 }
@@ -3686,11 +3702,14 @@
                 });
             }
 
-            updateProgress(currentTime, duration, facesCount) {
-                const pct = Math.round((currentTime / duration) * 100);
+            updateProgress(currentTime, startTime, endTime, facesCount) {
+                const duration = endTime - startTime;
+                const progress = currentTime - startTime;
+                const pct = Math.round((progress / duration) * 100);
+
                 this.ui.modalFill.style.width = `${pct}%`;
                 this.ui.modalPercent.textContent = `${pct}%`;
-                this.ui.modalSubtitle.textContent = `Procesando: ${formatTime(currentTime)} / ${formatTime(duration)} (${facesCount} caras)`;
+                this.ui.modalSubtitle.textContent = `Procesando: ${formatTime(currentTime)} / ${formatTime(endTime)} (${facesCount} caras)`;
             }
 
             stopRecording() {
