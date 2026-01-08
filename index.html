@@ -3404,18 +3404,28 @@
             // Persistence: Increased to 3 seconds (90 frames at 30fps) to bridge heavy occlusions
             const MAX_PERSISTENCE = 90;
 
-            // Optimized Seek: Added timeout for mobile stability
+            // Optimized Seek: Robust mobile handling
             const seekTo = (t) => new Promise(resolve => {
+                // Speed optimization: If already close enough (e.g. redundant seek), skip
+                if (Math.abs(video.currentTime - t) < 0.1) {
+                    resolve();
+                    return;
+                }
+
                 let resolved = false;
-                const h = () => {
+                const finish = () => {
                     if (resolved) return;
                     resolved = true;
-                    video.removeEventListener('seeked', h);
+                    video.removeEventListener('seeked', finish);
                     resolve();
                 };
-                // Timeout fallback for mobile browsers that might skip 'seeked' event
-                setTimeout(h, 1500);
-                video.addEventListener('seeked', h, { once: true });
+
+                // Aggressive timeout: 300ms (instead of 1500ms). 
+                // If 'seeked' doesn't fire in 300ms on mobile, we assume the frame is 'good enough' to keep moving
+                // rather than freezing the UI for 1.5s per frame.
+                setTimeout(finish, 300);
+
+                video.addEventListener('seeked', finish, { once: true });
                 video.currentTime = t;
             });
 
