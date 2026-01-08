@@ -3214,7 +3214,7 @@
                     });
 
                     this.video.volume = 1.0;
-                    this.video.muted = false;
+                    this.video.muted = false; // Enabled for both Recording Stream AND User Preview
 
                     // Ensure AudioContext is running
                     if (this.audioCtx && this.audioCtx.state === 'suspended') {
