@@ -3692,8 +3692,8 @@
                 canvas.height = state.videoHeight;
                 const ctx = canvas.getContext('2d');
 
-                // Audio Setup
-                let stream = processingCanvas.captureStream(30);
+                // Audio Setup - CRITICAL FIX: Use the local 'canvas' for the stream, not 'processingCanvas'
+                let stream = canvas.captureStream(30);
                 try {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     if (AudioContext) {
