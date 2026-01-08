@@ -3686,7 +3686,8 @@
         // Phase 2: Render video with effects (Continuous Stream)
         async function renderVideoPass(startTime, endTime) {
             return new Promise(async (resolve, reject) => {
-                const chunks = []; // Local chunks accumulator for the single recorder
+                // Reset global chunks array for this render
+                processingChunks = [];
                 const canvas = document.createElement('canvas');
                 canvas.width = state.videoWidth;
                 canvas.height = state.videoHeight;
