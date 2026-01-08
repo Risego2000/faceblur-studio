@@ -3146,15 +3146,28 @@
         function blurArea(ctx, x, y, w, h) {
             if (w <= 0 || h <= 0) return;
 
-            fxCanvas.width = w;
-            fxCanvas.height = h;
-            fxCtx.filter = `blur(${state.intensity}px)`;
+            // Optimization: Use a larger capture area to avoid edge bleeding
+            const bleed = Math.round(state.intensity * 2);
+            const cx = Math.max(0, x - bleed);
+            const cy = Math.max(0, y - bleed);
+            const cw = Math.min(ctx.canvas.width - cx, w + bleed * 2);
+            const ch = Math.min(ctx.canvas.height - cy, h + bleed * 2);
 
-            // Draw region to FX canvas with filter
-            fxCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+            fxCanvas.width = cw;
+            fxCanvas.height = ch;
 
-            // Draw back to main
-            ctx.drawImage(fxCanvas, x, y);
+            // 1. Capture original (No filter yet)
+            fxCtx.drawImage(ctx.canvas, cx, cy, cw, ch, 0, 0, cw, ch);
+
+            // 2. Draw back to main with filter active
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip(); // Keep blur inside the box
+
+            ctx.filter = `blur(${state.intensity}px)`;
+            ctx.drawImage(fxCanvas, cx, cy);
+            ctx.restore();
         }
 
         function solidArea(ctx, x, y, w, h) {
