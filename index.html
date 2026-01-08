@@ -107,344 +107,71 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border);
+            border-bottom: none;
+            /* Removed border */
             position: sticky;
             top: 0;
             z-index: 2000;
         }
 
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .logo-icon {
-            width: 38px;
-            height: 38px;
-            background: linear-gradient(135deg, var(--primary), #a855f7);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            box-shadow: 0 0 15px var(--primary-glow);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            cursor: pointer;
-        }
-
-        .logo-icon:hover {
-            transform: scale(1.05) rotate(5deg);
-        }
+        /* ... (logo styles) ... */
 
         .menu-toggle {
-            display: none;
-            background: var(--bg-hover);
-            border: 1px solid var(--border);
-            color: white;
-            padding: 8px;
-            min-width: 44px;
-            /* Touch target */
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
+            /* ... */
+            border: none;
+            /* Removed border */
+            /* ... */
         }
 
-        .menu-toggle:hover {
-            background: var(--border-hover);
-        }
-
-        .logo h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 20px;
-            font-weight: 700;
-            background: linear-gradient(to bottom, #fff, #94a3b8);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
+        /* ... (header-status) ... */
         .header-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 14px;
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--warning);
-            box-shadow: 0 0 8px var(--warning);
-            position: relative;
-        }
-
-        .status-dot.ready {
-            background: var(--success);
-            box-shadow: 0 0 10px var(--success);
-        }
-
-        .status-dot.ready::after {
-            content: '';
-            position: absolute;
-            inset: -2px;
-            border-radius: 50%;
-            border: 2px solid var(--success);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 0.8;
-            }
-
-            100% {
-                transform: scale(2.5);
-                opacity: 0;
-            }
-        }
-
-        /* Main Layout */
-        .app {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            height: 100dvh;
-            /* Mobile viewport fix */
-            overflow: hidden;
-            background: var(--bg-dark);
-        }
-
-        /* Immersive Fullscreen Mobile/Tablet Mode (Active when video is loaded) */
-        @media (max-width: 1024px) {
-            body.video-active header {
-                display: none !important;
-            }
-
-            body.video-active .app {
-                height: 100dvh !important;
-                height: -webkit-fill-available !important;
-                overflow: hidden !important;
-                position: fixed !important;
-                inset: 0 !important;
-                width: 100vw !important;
-            }
-
-            body.video-active .workspace {
-                position: fixed !important;
-                inset: 0 !important;
-                width: 100vw !important;
-                height: 100dvh !important;
-                height: -webkit-fill-available !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                z-index: 10000 !important;
-                background: #000 !important;
-                display: flex !important;
-                flex-direction: column !important;
-            }
-
-            body.video-active .video-card {
-                border-radius: 0 !important;
-                margin: 0 !important;
-                border: none !important;
-                background: #000 !important;
-                flex: 1 !important;
-                height: 100% !important;
-                width: 100vw !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: center !important;
-            }
-
-            body.video-active .video-controls {
-                position: absolute !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                border-radius: 0 !important;
-                padding: 12px 16px !important;
-                padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
-                background: rgba(0, 0, 0, 0.9) !important;
-                backdrop-filter: blur(20px);
-                z-index: 10001 !important;
-                border-top: none !important;
-                /* Removed grey profile */
-            }
-
-            body.video-active .video-canvas-wrapper {
-                flex: 1 !important;
-                height: 100% !important;
-                width: 100% !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                background: #000;
-            }
-
-            body.video-active #renderCanvas {
-                max-height: 100% !important;
-                max-width: 100% !important;
-                object-fit: contain !important;
-            }
+            /* ... */
+            border: none;
+            /* Removed border */
+            background: rgba(0, 0, 0, 0.4);
+            /* ... */
         }
 
         /* Sidebar */
         .sidebar {
             background: var(--bg-card);
             padding: 20px 16px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: none;
+            /* Removed border */
             overflow-y: auto;
             overflow-x: hidden;
             max-height: 100%;
         }
 
-        @media (max-width: 767px) {
-            .sidebar {
-                padding: 12px;
-            }
-        }
-
-        .sidebar-section {
-            margin-bottom: 20px;
-        }
-
-        .sidebar-section:last-child {
-            margin-bottom: 0;
-        }
-
-        @media (max-width: 767px) {
-            .sidebar-section {
-                margin-bottom: 12px;
-            }
-        }
-
-        .section-title {
-            font-size: 11px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 10px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        /* ... */
 
         .section-title::after {
             content: '';
             flex: 1;
             height: 1px;
-            background: var(--border);
+            background: rgba(255, 255, 255, 0.05);
+            /* Very subtle separator or remove */
         }
 
-        .workspace {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            /* Crucial: contain children */
-            position: relative;
-            padding: 24px;
-        }
-
-        @media (max-width: 767px) {
-            .section-title {
-                font-size: 10px;
-                margin-bottom: 6px;
-            }
+        /* Just remove the separator line entirely if desired, but 0.05 is barely visible */
+        .section-title::after {
+            display: none;
         }
 
         /* Buttons */
-        .btn {
-            padding: 10px 16px;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            user-select: none;
-        }
-
-        @media (max-width: 767px) {
-            .btn {
-                padding: 8px 12px;
-                font-size: 13px;
-                border-radius: 10px;
-            }
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-            width: 100%;
-            box-shadow: 0 4px 12px var(--primary-glow);
-        }
-
-        .btn-primary:not(:disabled):hover {
-            background: var(--primary-light);
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px var(--primary-glow);
-        }
-
         .btn-secondary {
             background: var(--bg-hover);
             color: var(--text);
-            border: 1px solid var(--border);
+            border: none;
+            /* Removed border */
         }
 
-        .btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            filter: grayscale(0.5);
-        }
-
-        /* Desktop Overlay (Bottom Left) */
-        .video-overlay-status {
-            position: absolute;
-            bottom: 24px;
-            left: 24px;
-            background: rgba(0, 0, 0, 0.50);
-            /* 50% Translucent */
-            backdrop-filter: blur(12px);
-            padding: 16px;
-            border-radius: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 5;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-            width: 280px;
-        }
-
-        @media (max-width: 767px) {
-            .effect-grid {
-                gap: 8px;
-            }
-        }
-
+        /* Effects */
         .effect-option {
             padding: 16px 12px;
             background: var(--bg-dark);
-            border: 1px solid var(--border);
+            border: none;
+            /* Removed border */
             border-radius: 12px;
             cursor: pointer;
             text-align: center;
@@ -453,21 +180,18 @@
             overflow: hidden;
         }
 
-        @media (max-width: 767px) {
-            .effect-option {
-                padding: 10px 8px;
-                border-radius: 8px;
-            }
-        }
-
         .effect-option.active {
-            border-color: var(--primary);
-            background: rgba(99, 102, 241, 0.08);
-            box-shadow: inset 0 0 0 1px var(--primary);
+            /* border-color: var(--primary); Removed border color */
+            background: rgba(99, 102, 241, 0.2);
+            /* Stronger background to indicate active */
+            box-shadow: none;
+            /* Removed inset border */
+            outline: 2px solid var(--primary);
+            /* Use outline or just background */
         }
 
         .effect-option:hover {
-            border-color: var(--border-hover);
+            /* border-color: var(--border-hover); Removed */
             transform: translateY(-2px);
             background: var(--bg-hover);
         }
@@ -576,108 +300,74 @@
         .mode-option:hover {
             background: var(--bg-hover);
             border-color: var(--border-hover);
-        }
 
-        .mode-option.active {
-            border-color: var(--primary);
-            background: rgba(99, 102, 241, 0.08);
-            box-shadow: inset 0 0 0 1px var(--primary);
-        }
-
-        .mode-icon {
-            font-size: 18px;
-            opacity: 0.8;
-        }
-
-        .mode-name {
-            font-size: 14px;
-            font-weight: 500;
-            flex: 1;
-        }
-
-        .mode-check {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            border: 2px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            color: white;
-            transition: all 0.2s;
-            opacity: 0.5;
-        }
-
-        .mode-option.active .mode-check {
-            background: var(--primary);
-            border-color: var(--primary);
-            opacity: 1;
-        }
-
-        /* Preview Toggle */
-        .preview-toggle {
-            display: flex;
-            gap: 8px;
-        }
-
-        @media (max-width: 767px) {
-            .preview-toggle {
-                gap: 6px;
+            /* Detection/Tracking */
+            .mode-option {
+                /* ... */
+                border: none;
+                /* Removed border */
+                /* ... */
             }
-        }
 
-        .preview-btn {
-            flex: 1;
-            padding: 8px 6px;
-            background: var(--bg-dark);
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-muted);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+            .mode-option.active {
+                /* border-color: var(--primary); Removed */
+                /* box-shadow: inset 0 0 0 1px var(--primary); Removed border shadow */
+                outline: 2px solid var(--primary);
+            }
 
-        @media (max-width: 767px) {
+            /* Preview Toggle */
             .preview-btn {
-                padding: 6px 4px;
-                font-size: 11px;
-                border-radius: 6px;
+                flex: 1;
+                padding: 8px 6px;
+                background: var(--bg-dark);
+                border: none;
+                /* Removed border */
+                border-radius: 8px;
+                color: var(--text-muted);
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
             }
-        }
 
-        .preview-btn:hover {
-            border-color: var(--primary);
-        }
+            .preview-btn:hover {
+                background: var(--bg-hover);
+                /* Instead of border color */
+            }
 
-        .preview-btn.active {
-            border-color: var(--primary);
-            background: rgba(99, 102, 241, 0.1);
-            color: var(--text);
-        }
+            .preview-btn.active {
+                border: none;
+                /* Ensure no border */
+                outline: 2px solid var(--primary);
+                /* Outline for active state */
+                background: rgba(99, 102, 241, 0.1);
+                color: var(--text);
+            }
 
-        /* Workspace */
-        .workspace {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 30px;
-            background-image:
-                radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
-            background-size: 40px 40px;
-            position: relative;
-            overflow: hidden;
-            /* No scroll */
-        }
+            /* Upload Area */
+            .upload-area {
+                width: 100%;
+                max-width: 440px;
+                padding: 60px 40px;
+                border: none;
+                /* Removed border dashed */
+                /* Use a subtle background diff or shadow instead? Or just keep it clean */
+                background: var(--bg-card);
+                border-radius: 24px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: var(--shadow-lg);
+                /* Optional: Add an outline for structure without "border" look */
+                outline: 2px dashed var(--border);
+            }
 
-        /* Upload Area */
-        .upload-area {
-            width: 100%;
-            max-width: 440px;
-            padding: 60px 40px;
-            border: 2px dashed var(--border);
+            .upload-area:hover,
+            .upload-area.dragover {
+                outline-color: var(--primary);
+                background: rgba(99, 102, 241, 0.03);
+                transform: scale(1.01);
+            }
+
             border-radius: 24px;
             text-align: center;
             cursor: pointer;
@@ -841,7 +531,8 @@
             background: var(--bg-card);
             border-radius: 20px;
             overflow: hidden;
-            border: 1px solid var(--border);
+            border: none;
+            /* Removed border */
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
@@ -1032,7 +723,8 @@
         .header-btn {
             padding: 8px 12px;
             background: var(--bg-dark);
-            border: 1px solid var(--border);
+            border: none;
+            /* Removed border */
             border-radius: 6px;
             color: var(--text);
             font-size: 12px;
