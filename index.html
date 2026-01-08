@@ -3666,7 +3666,8 @@
                     }
                 }
 
-
+                // CRITICAL FIX: Advance time to next analysis frame
+                currentTime += frameTime;
             }
             // Restore original attributes
             video.width = originalWidthAttr;
