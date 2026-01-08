@@ -215,7 +215,31 @@
             height: 100dvh;
             /* Mobile viewport fix */
             overflow: hidden;
-            /* Fix global scroll */
+            background: var(--bg-dark);
+        }
+
+        /* Fullscreen mobile mode when video is active */
+        @media (max-width: 768px) {
+            body.video-active header {
+                display: none !important;
+            }
+
+            body.video-active .workspace {
+                height: 100dvh !important;
+                padding: 0 !important;
+            }
+
+            body.video-active .video-card {
+                border-radius: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+
+            body.video-active .video-controls {
+                border-radius: 0 !important;
+                padding: 10px 16px !important;
+                background: rgba(0, 0, 0, 0.8) !important;
+            }
         }
 
         /* Sidebar */
@@ -2537,6 +2561,7 @@
             // Show loading state
             elements.uploadArea.style.display = 'none';
             elements.videoContainer.classList.add('active');
+            document.body.classList.add('video-active');
             const loader = document.getElementById('videoLoader');
             if (loader) loader.classList.add('active');
 
@@ -2648,6 +2673,7 @@
             }
             */
 
+            document.body.classList.remove('video-active');
             console.log('App state reset for new video');
         }
 
