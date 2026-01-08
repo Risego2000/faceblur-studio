@@ -3306,8 +3306,8 @@
                     }
                     const avgDiff = diffSum / (samples * 3);
 
-                    // Threshold: >20 avg pixel diff indicates significant change (Lowered for faster reaction)
-                    if (avgDiff > 20) {
+                    // Threshold: >50 avg pixel diff indicates robust scene change (Increased to prevent false positives)
+                    if (avgDiff > 50) {
                         // Camera Cut Detected! 
                         console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
 
@@ -3593,29 +3593,37 @@
                         while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
                             analysisIndex++;
                         }
-                        const frameData = analysisData[analysisIndex];
 
-                        // Apply Effects if close enough in time (sync check)
-                        if (frameData && Math.abs(frameData.time - video.currentTime) < 0.5) {
-                            const padding = state.padding;
+                        // Smart Interpolation / Hold
+                        // Try to find a valid frame within a 1.0s window
+                        let frameData = null;
 
-                            if (frameData.faces) {
-                                frameData.faces.forEach(face => {
-                                    if (face.excluded) return;
-                                    const box = face.box;
+                        // Check current index
+                        if (analysisData[analysisIndex] && Math.abs(analysisData[analysisIndex].time - video.currentTime) < 1.0) {
+                            frameData = analysisData[analysisIndex];
+                        }
+                        // Fallback: Check next index (sometimes closer)
+                        if (!frameData && analysisData[analysisIndex + 1] && Math.abs(analysisData[analysisIndex + 1].time - video.currentTime) < 1.0) {
+                            frameData = analysisData[analysisIndex + 1];
+                        }
 
-                                    // Calc coordinates
-                                    const x = Math.max(0, box.x - (box.width * padding));
-                                    const y = Math.max(0, box.y - (box.height * padding));
-                                    const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
-                                    const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
+                        // Apply Effects
+                        if (frameData && frameData.faces && frameData.faces.length > 0) {
+                            frameData.faces.forEach(face => {
+                                if (face.excluded) return;
+                                const box = face.box;
 
-                                    // Draw Effect
-                                    if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
-                                    else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
-                                    else solidArea(ctx, x, y, w, h);
-                                });
-                            }
+                                // Calc coordinates
+                                const x = Math.max(0, box.x - (box.width * padding));
+                                const y = Math.max(0, box.y - (box.height * padding));
+                                const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
+                                const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
+
+                                // Draw Effect
+                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
+                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
+                                else solidArea(ctx, x, y, w, h);
+                            });
                         }
 
                         // UI Update
