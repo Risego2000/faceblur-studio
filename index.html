@@ -3346,22 +3346,43 @@
 
                 const startTime = state.trimStart || 0;
                 const endTime = state.trimEnd || video.duration;
-                // PHASE 1: ANALYSIS (No Memory Crash)
-                elements.modalSubtitle.textContent = 'Fase 1/2: Analizando rostros...';
+                // CHUNKED PROCESSING (Interleaved Analysis -> Render -> Garbage Collect)
+                // This prevents memory crash on mobile by freeing data every few seconds
 
-                // Clear previous analysis to free memory
-                analysisData = [];
-                analysisData = await analyzeVideoPass(startTime, endTime);
+                await setupRecorder();
+
+                const CHUNK_DURATION = 3.0; // 3 seconds per chunk
+                let currentChunkStart = startTime;
+
+                while (currentChunkStart < endTime && !state.processingCanceled) {
+                    const currentChunkEnd = Math.min(endTime, currentChunkStart + CHUNK_DURATION);
+
+                    // 1. Analyze Block
+                    elements.modalSubtitle.textContent = `Procesando: ${formatTime(currentChunkStart)} - ${formatTime(currentChunkEnd)}`;
+                    const chunkAnalysisData = await analyzeVideoPass(currentChunkStart, currentChunkEnd);
+
+                    if (state.processingCanceled) break;
+
+                    // 2. Render Block (Append to Recorder)
+                    await renderChunk(currentChunkStart, currentChunkEnd, chunkAnalysisData);
+
+                    // 3. Update Global Progress (0-100% Linear)
+                    const pct = Math.round(((currentChunkEnd - startTime) / (endTime - startTime)) * 100);
+                    elements.modalFill.style.width = pct + '%';
+                    elements.modalPercent.textContent = pct + '%';
+
+                    // 4. Force GC Step
+                    currentChunkStart = currentChunkEnd;
+
+                    // Small yield
+                    await new Promise(r => setTimeout(r, 10));
+                }
 
                 if (state.processingCanceled) throw new Error('Cancelado por usuario');
 
-                // PHASE 2: RENDERING (Streaming to Recorder)
-                elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
-                elements.modalFill.style.width = '50%'; // Start Phase 2 at 50%
-                await renderVideoPass(startTime, endTime);
-
-                // Clear memory immediately after rendering
-                analysisData = [];
+                // Finish
+                elements.modalSubtitle.textContent = 'Finalizando video...';
+                await finishRecording();
 
                 // FINAL UI UPDATE (Moved here to ensure it runs when Phase 2 promise resolves)
                 if (state.processedBlob && state.processedBlob.size > 0) {
@@ -3621,18 +3642,10 @@
                     }
                 }
 
-                // Update Progress (Phase 1: 0-50%)
-                const analysisPct = ((currentTime - startTime) / duration) * 50;
-                const totalPct = Math.min(50, Math.round(analysisPct));
-
-                elements.modalFill.style.width = totalPct + '%';
-                elements.modalPercent.textContent = totalPct + '%';
-                elements.modalSubtitle.textContent = `Fase 1/2: Analizando (${formatTime(currentTime)} / ${formatTime(endTime)})`;
-
+                // Progress is now handled in wrapper function
+                // Just yield to keep UI alive
                 currentTime += frameTime;
             }
-
-
             // Restore original attributes
             video.width = originalWidthAttr;
             video.height = originalHeightAttr;
@@ -3640,218 +3653,149 @@
             return data;
         }
 
-        // Phase 2: Play and Record (Streaming) - No Memory Buffer
-        async function renderVideoPass(startTime, endTime) {
-            return new Promise(async (resolve, reject) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = state.videoWidth;
-                canvas.height = state.videoHeight;
-                const ctx = canvas.getContext('2d');
+        // Global resources for chunked processing
+        let processingRecorder = null;
+        let processingStream = null;
+        let processingChunks = [];
+        let processingCanvas = null;
+        let processingCtx = null;
 
-                // Audio Setup
-                let stream;
-                try {
-                    // 30 FPS output stream
-                    stream = canvas.captureStream(30);
+        async function setupRecorder() {
+            processingChunks = [];
+            processingCanvas = document.createElement('canvas');
+            processingCanvas.width = state.videoWidth;
+            processingCanvas.height = state.videoHeight;
+            processingCtx = processingCanvas.getContext('2d');
 
-                    // Try to capture Audio from Video Element
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        // Create context only once if possible or manage lifecycle
-                        if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
-                        const audioCtx = window.audioCtxGlobal;
-                        if (audioCtx.state === 'suspended') await audioCtx.resume();
+            // Audio Setup
+            let stream = processingCanvas.captureStream(30);
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
+                    const audioCtx = window.audioCtxGlobal;
+                    if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-                        // Need a source node. Note: createMediaElementSource can only be called once per element.
-                        // We store it on the video element wrapper or global map
-                        if (!video._audioSourceNode) {
-                            video._audioSourceNode = audioCtx.createMediaElementSource(video);
-                        }
-
-                        const source = video._audioSourceNode;
-                        const dest = audioCtx.createMediaStreamDestination();
-
-                        // Connect to destination (Recorder)
-                        source.connect(dest);
-
-                        // Also connect to speakers? Maybe mute to avoid echo/feedback during fast processing.
-                        // Let's NOT connect to speakers for silent processing.
-
-                        if (dest.stream.getAudioTracks().length > 0) {
-                            stream.addTrack(dest.stream.getAudioTracks()[0]);
-                        }
-
-                        console.log('Audio capture configured');
+                    if (!video._audioSourceNode) {
+                        try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
                     }
-                } catch (e) {
-                    console.warn('Audio capture issue:', e);
-                    if (!stream) stream = canvas.captureStream(30); // Fallback
+                    if (video._audioSourceNode) {
+                        const dest = audioCtx.createMediaStreamDestination();
+                        video._audioSourceNode.connect(dest);
+                        if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
+                    }
+                }
+            } catch (e) { console.warn('Audio setup warning:', e); }
+
+            processingStream = stream;
+
+            let mimeType = 'video/webm;codecs=vp9,opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
+
+            processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
+            processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
+
+            processingRecorder.start(100); // Small slices
+            // Immediately pause. We only record during renderChunk.
+            processingRecorder.pause();
+        }
+
+        async function renderChunk(startTime, endTime, chunkData) {
+            return new Promise((resolve, reject) => {
+                if (!processingRecorder || processingRecorder.state === 'inactive') {
+                    reject(new Error('Recorder not ready'));
+                    return;
                 }
 
-                // Setup Recorder
-                let mimeType = 'video/webm;codecs=vp9,opus';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-                if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
-
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: mimeType,
-                    videoBitsPerSecond: 8000000 // High Quality
-                });
-
-                const chunks = [];
-                recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
-                // Shared Finalization Logic
-                const finalizeExport = () => {
-                    try {
-                        if (state.processedBlob) {
-                            resolve(); // Already done
-                            return;
-                        }
-
-                        console.log('Finalizing export...');
-                        const blobType = recorder.mimeType || mimeType;
-                        state.processedBlob = new Blob(chunks, { type: blobType });
-
-                        // Stop all tracks to release resources
-                        if (stream) {
-                            stream.getTracks().forEach(track => track.stop());
-                        }
-
-                        if (state.processedBlob.size === 0 && !state.processingCanceled) {
-                            // Fallback: if empty, try to resolve anyway to avoid hanging, or throw error?
-                            // Throwing error stops the flow correctly.
-                            throw new Error('El video generado está vacío.');
-                        }
-
-                        state.isProcessing = false;
-                        resolve();
-                    } catch (err) {
-                        console.error('Error finalizando video:', err);
-                        reject(err);
-                    }
-                };
-
-                recorder.onstop = () => {
-                    console.log('Recorder stopped (event)');
-                    finalizeExport();
-                };
-
-                // Start with smaller slices (optimizes memory)
-                recorder.start(1000);
-
-                // Safety Resolution: Real Heartbeat check
-                let safetyResolved = false;
-                const forceResolve = () => {
-                    if (safetyResolved) return;
-                    safetyResolved = true;
-                    console.log('Safety Resolution triggered');
-
-                    if (recorder.state === 'recording') {
-                        recorder.stop();
-                    }
-
-                    // Force finalization if onstop doesn't fire quickly (Safari bug fix)
-                    setTimeout(() => {
-                        if (!state.processedBlob) {
-                            console.warn('Force finalizing (onstop missed)');
-                            finalizeExport();
-                        }
-                    }, 500);
-                };
-
-                // Playback Logic
-                let analysisIndex = 0;
+                // Resume recording for this chunk
+                if (processingRecorder.state === 'paused') processingRecorder.resume();
 
                 video.currentTime = startTime;
-                video.muted = false; // Unmute for capture
+                video.muted = false;
                 video.volume = 1.0;
+
+                // Analysis Index for this chunk
+                let analysisIndex = 0;
 
                 video.play().then(() => {
                     const drawLoop = () => {
                         if (state.processingCanceled) {
-                            recorder.stop();
+                            if (processingRecorder.state === 'recording') processingRecorder.pause();
                             video.pause();
-                            reject(new Error('Cancelado por usuario'));
+                            reject(new Error('Cancelado'));
                             return;
                         }
 
-                        // Stop Condition: Robust end detection for long videos (inclusive 0.1s margin)
-                        if (video.currentTime >= endTime - 0.1 || video.paused || video.ended || state.processingCanceled) {
-                            console.log('Export Loop: End reached or canceled at', video.currentTime);
-                            elements.modalSubtitle.textContent = 'Fase 2/2: Finalizando archivo...';
-                            if (recorder.state === 'recording') {
-                                recorder.stop();
-                            }
-
-                            // Let the onstop handle resolution, but ensure it happens
-                            setTimeout(() => {
-                                if (!safetyResolved) forceResolve();
-                            }, 3000);
-
+                        // Chunk End Condition
+                        // We use a small buffer (0.05) to ensure we cover the range but don't overrun too much
+                        if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
+                            if (processingRecorder.state === 'recording') processingRecorder.pause();
                             video.pause();
+                            resolve();
                             return;
                         }
 
-                        // Draw Video Frame
+                        // Draw
                         const padding = state.padding;
-                        ctx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
+                        processingCtx.drawImage(video, 0, 0, state.videoWidth, state.videoHeight);
 
-                        // Find closest analysis data (Efficient scan)
-                        // Advance index until we find a frame ahead of current time
-                        while (analysisIndex < analysisData.length - 1 && analysisData[analysisIndex + 1].time <= video.currentTime) {
+                        // Find data
+                        while (analysisIndex < chunkData.length - 1 && chunkData[analysisIndex + 1].time <= video.currentTime) {
                             analysisIndex++;
                         }
 
-                        // Smart Interpolation / Hold
-                        // Try to find a valid frame within a 1.0s window
                         let frameData = null;
-
-                        // Check current index
-                        if (analysisData[analysisIndex] && Math.abs(analysisData[analysisIndex].time - video.currentTime) < 1.0) {
-                            frameData = analysisData[analysisIndex];
-                        }
-                        // Fallback: Check next index (sometimes closer)
-                        if (!frameData && analysisData[analysisIndex + 1] && Math.abs(analysisData[analysisIndex + 1].time - video.currentTime) < 1.0) {
-                            frameData = analysisData[analysisIndex + 1];
+                        if (chunkData[analysisIndex] && Math.abs(chunkData[analysisIndex].time - video.currentTime) < 1.0) {
+                            frameData = chunkData[analysisIndex];
                         }
 
-                        // Apply Effects
-                        if (frameData && frameData.faces && frameData.faces.length > 0) {
+                        // Effects
+                        if (frameData && frameData.faces) {
                             frameData.faces.forEach(face => {
                                 if (!face || face.excluded || !face.box) return;
                                 const box = face.box;
-
-                                // Calc coordinates
                                 const x = Math.max(0, box.x - (box.width * padding));
                                 const y = Math.max(0, box.y - (box.height * padding));
                                 const w = Math.min(state.videoWidth - x, box.width * (1 + padding * 2));
                                 const h = Math.min(state.videoHeight - y, box.height * (1 + padding * 2));
 
-                                // Draw Effect
-                                if (state.effect === 'pixelate') pixelateArea(ctx, x, y, w, h);
-                                else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
-                                else solidArea(ctx, x, y, w, h);
+                                if (state.effect === 'pixelate') pixelateArea(processingCtx, x, y, w, h);
+                                else if (state.effect === 'blur') blurArea(processingCtx, x, y, w, h);
+                                else solidArea(processingCtx, x, y, w, h);
                             });
                         }
-
-                        // UI Update (Phase 2: 50-100%)
-                        const renderPct = ((video.currentTime - startTime) / (endTime - startTime)) * 50;
-                        const totalPct = Math.min(100, Math.round(50 + renderPct));
-
-                        elements.modalFill.style.width = totalPct + '%';
-                        elements.modalPercent.textContent = totalPct + '%';
 
                         requestAnimationFrame(drawLoop);
                     };
                     drawLoop();
-                }).catch(e => {
-                    console.error('Playback failed', e);
-                    reject(e);
-                });
+                }).catch(reject);
             });
         }
 
+        async function finishRecording() {
+            return new Promise((resolve, reject) => {
+                if (!processingRecorder) { resolve(); return; }
+
+                processingRecorder.onstop = () => {
+                    try {
+                        const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
+                        state.processedBlob = blob;
+                        if (processingStream) processingStream.getTracks().forEach(t => t.stop());
+                        resolve();
+                    } catch (e) { reject(e); }
+                };
+
+                // Ensure it's stopped
+                if (processingRecorder.state !== 'inactive') processingRecorder.stop();
+                else {
+                    // Manual trigger if already inactive
+                    const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
+                    state.processedBlob = blob;
+                    resolve();
+                }
+            });
+        }
         // Helper to check if PWA is already installed
         function isPwaInstalled() {
             return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
