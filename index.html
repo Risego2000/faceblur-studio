@@ -2348,7 +2348,7 @@
 
                     // Update description
                     const descEl = document.getElementById('modelDescription');
-                    if (descEl) descEl.textContent = modelDescriptions[state.modelPreference] || '';
+                    if (descEl) descEl.innerHTML = modelDescriptions[state.modelPreference] || '';
 
                     // Forzar recarga de IA con la nueva preferencia
                     state.modelReady = false;
