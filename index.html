@@ -3472,12 +3472,12 @@
                                     },
                                     identity: null
                                 }));
-                            } else {
+                            } else if (window.faceDetector) {
                                 detections = await faceapi.detectAllFaces(video, window.faceDetector);
                                 detections = detections.map(d => ({ detection: d, identity: null }));
                             }
                         } catch (e) {
-                            console.warn('Detection error:', e);
+                            // Silent fail for detection errors to keep video smooth
                         }
 
                         let faces = filterFaces(detections);
@@ -4132,57 +4132,67 @@
 
         // Export Success UI
         function showExportSuccess() {
-            elements.modalTitle.textContent = '¡Video Listo!';
-            elements.modalSubtitle.textContent = 'Selecciona una opción:';
+            try {
+                if (!state.processedBlob) {
+                    throw new Error('No video blob available');
+                }
+                elements.modalTitle.textContent = '¡Video Listo!';
+                elements.modalSubtitle.textContent = 'Selecciona una opción:';
 
-            const fillParent = elements.modalFill.parentElement;
-            if (fillParent) fillParent.style.display = 'none';
-            if (elements.modalPercent) elements.modalPercent.style.display = 'none';
+                const fillParent = elements.modalFill.parentElement;
+                if (fillParent) fillParent.style.display = 'none';
+                if (elements.modalPercent) elements.modalPercent.style.display = 'none';
 
-            const spinner = document.querySelector('.modal-spinner');
-            if (spinner) spinner.style.display = 'none';
+                const spinner = document.querySelector('.modal-spinner');
+                if (spinner) spinner.style.display = 'none';
 
-            elements.cancelBtn.textContent = 'Cerrar';
+                elements.cancelBtn.textContent = 'Cerrar';
 
-            const actions = document.getElementById('modalActions');
-            if (actions) actions.style.display = 'flex';
+                const actions = document.getElementById('modalActions');
+                if (actions) actions.style.display = 'flex';
 
-            const blobType = state.processedBlob.type || 'video/webm';
-            const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
+                const blobType = state.processedBlob.type || 'video/webm';
+                const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
 
-            // Bind Download
-            const dlBtn = document.getElementById('btnDownload');
-            if (dlBtn) {
-                dlBtn.onclick = () => {
-                    const url = URL.createObjectURL(state.processedBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `faceanon_pro_${Date.now()}.${ext}`;
-                    a.click();
-                    setTimeout(() => URL.revokeObjectURL(url), 10000);
-                };
+                // Bind Download
+                const dlBtn = document.getElementById('btnDownload');
+                if (dlBtn) {
+                    dlBtn.onclick = () => {
+                        const url = URL.createObjectURL(state.processedBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `faceanon_pro_${Date.now()}.${ext}`;
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 10000);
+                    };
+                }
+
+                // Bind Share
+                const shareBtn = document.getElementById('btnShare');
+                if (shareBtn) {
+                    shareBtn.onclick = async () => {
+                        if (navigator.share) {
+                            const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
+                            try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
+                        } else {
+                            alert('Compartir no soportado en este dispositivo.');
+                        }
+                    };
+                }
+
+                elements.processBtn.disabled = false;
+                elements.exportBtn.disabled = false;
+
+                // Reset Audio/Video for user
+                video.muted = false;
+                video.volume = 1.0;
+
+            } catch (e) {
+                console.error('Error showing export success UI:', e);
+                alert('El video se generó correctamente, pero hubo un error mostrando la interfaz de guardado.');
             }
-
-            // Bind Share
-            const shareBtn = document.getElementById('btnShare');
-            if (shareBtn) {
-                shareBtn.onclick = async () => {
-                    if (navigator.share) {
-                        const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
-                        try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
-                    } else {
-                        alert('Compartir no soportado en este dispositivo.');
-                    }
-                };
-            }
-
-            elements.processBtn.disabled = false;
-            elements.exportBtn.disabled = false;
-
-            // Reset Audio/Video for user
-            video.muted = false;
-            video.volume = 1.0;
         }
+
 
         // Export video
         function exportVideo() {
