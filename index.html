@@ -3752,11 +3752,23 @@
                 let renderStartRealTime = null;
                 let lastFaceCount = 0;
 
-                // Ensure playsinline for iOS
-                video.setAttribute('playsinline', '');
-                video.setAttribute('webkit-playsinline', '');
 
-                video.play().then(() => {
+                // Force video to be ready
+                video.load();
+                await new Promise(r => setTimeout(r, 200));
+
+                // Try to play - if it fails, it will throw to catch
+                try {
+                    await video.play();
+                    console.log('✓ Video playing for render');
+                } catch (playErr) {
+                    console.error('Play failed:', playErr);
+                    // On mobile, play might fail. Reject immediately to show error
+                    reject(new Error('No se pudo reproducir el video en este dispositivo. Intenta con un video más corto.'));
+                    return;
+                }
+
+                {
                     console.log('Video playback started for render');
                     renderStartRealTime = performance.now();
 
@@ -3846,10 +3858,7 @@
                         requestAnimationFrame(drawLoop);
                     };
                     drawLoop();
-                }).catch(e => {
-                    console.error('Video play failed:', e);
-                    reject(new Error('No se pudo iniciar la reproducción del video. Intente de nuevo.'));
-                });
+                }
             });
         }
 
