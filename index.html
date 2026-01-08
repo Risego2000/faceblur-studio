@@ -3344,7 +3344,7 @@
 
                 // PHASE 2: RENDERING (Streaming to Recorder)
                 elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
-                elements.modalFill.style.width = '0%'; // Reset for Phase 2
+                elements.modalFill.style.width = '50%'; // Start Phase 2 at 50%
                 await renderVideoPass(startTime, endTime);
 
                 // Clear memory immediately after rendering
@@ -3598,10 +3598,12 @@
                     }
                 }
 
-                // Update Progress (Phase 1)
-                const pct = Math.min(100, Math.round(((currentTime - startTime) / duration) * 100));
-                elements.modalFill.style.width = pct + '%';
-                elements.modalPercent.textContent = pct + '%';
+                // Update Progress (Phase 1: 0-50%)
+                const analysisPct = ((currentTime - startTime) / duration) * 50;
+                const totalPct = Math.min(50, Math.round(analysisPct));
+
+                elements.modalFill.style.width = totalPct + '%';
+                elements.modalPercent.textContent = totalPct + '%';
                 elements.modalSubtitle.textContent = `Fase 1/2: Analizando (${formatTime(currentTime)} / ${formatTime(endTime)})`;
 
                 currentTime += frameTime;
@@ -3810,10 +3812,12 @@
                             });
                         }
 
-                        // UI Update
-                        const pct = Math.min(100, Math.round(((video.currentTime - startTime) / (endTime - startTime)) * 100));
-                        elements.modalFill.style.width = pct + '%';
-                        elements.modalPercent.textContent = pct + '%';
+                        // UI Update (Phase 2: 50-100%)
+                        const renderPct = ((video.currentTime - startTime) / (endTime - startTime)) * 50;
+                        const totalPct = Math.min(100, Math.round(50 + renderPct));
+
+                        elements.modalFill.style.width = totalPct + '%';
+                        elements.modalPercent.textContent = totalPct + '%';
 
                         requestAnimationFrame(drawLoop);
                     };
