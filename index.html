@@ -3472,30 +3472,60 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
 
-                // Create Stream - 30fps fixed for stability
+                // Create Stream - 30fps base
                 const stream = canvas.captureStream(30);
 
-                // Audio Setup (Robust)
+                // Audio Setup - Try to grab 'live' audio from video element
+                let audioTrack = null;
+
+                // Method 1: captureStream (Best for Sync)
                 try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        this.audioCtx = new AudioContext();
-                        if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+                    // Try standard then webkit
+                    const vidStream = this.video.captureStream ? this.video.captureStream() :
+                        (this.video.mozCaptureStream ? this.video.mozCaptureStream() : null);
 
-                        // Force simple reliable audio
-                        this.audioSource = this.audioCtx.createMediaElementSource(this.video);
-                        const dest = this.audioCtx.createMediaStreamDestination();
-
-                        this.audioSource.connect(dest);
-                        this.audioSource.connect(this.audioCtx.destination); // Let user hear it while processing
-
-                        if (dest.stream.getAudioTracks().length > 0) {
-                            stream.addTrack(dest.stream.getAudioTracks()[0]);
-                            console.log('✓ Audio track attached successfully');
+                    if (vidStream) {
+                        const tracks = vidStream.getAudioTracks();
+                        if (tracks.length > 0) {
+                            audioTrack = tracks[0];
+                            console.log('✓ Audio obtained from video stream');
                         }
                     }
                 } catch (e) {
-                    console.warn('Audio setup warning (continuing without audio):', e);
+                    console.warn('captureStream audio failed:', e);
+                }
+
+                // Method 2: AudioContext (Fallback)
+                if (!audioTrack) {
+                    try {
+                        const AudioContext = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContext) {
+                            if (!this.audioCtx) this.audioCtx = new AudioContext();
+                            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+
+                            // Use MediaElementSource - careful not to duplicate connections
+                            if (!this.audioSource) {
+                                this.audioSource = this.audioCtx.createMediaElementSource(this.video);
+                            }
+                            const dest = this.audioCtx.createMediaStreamDestination();
+                            this.audioSource.connect(dest);
+                            this.audioSource.connect(this.audioCtx.destination); // Mix to output
+
+                            if (dest.stream.getAudioTracks().length > 0) {
+                                audioTrack = dest.stream.getAudioTracks()[0];
+                                console.log('✓ Audio obtained from AudioContext');
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('AudioContext fallback failed:', e);
+                    }
+                }
+
+                // Add Audio Track if found
+                if (audioTrack) {
+                    stream.addTrack(audioTrack);
+                } else {
+                    console.warn('⚠️ No Audio Track could be captured.');
                 }
 
                 return { canvas, ctx, stream };
@@ -3532,90 +3562,84 @@
             }
 
             async processFrames(canvas, ctx) {
-                const totalDuration = this.video.duration;
-                // Determine processing range
-                const startTime = this.state.trimStart || 0;
-                let endTime = this.state.trimEnd;
-
-                // Validate endTime
-                if (endTime === null || endTime === undefined || endTime > totalDuration || endTime <= startTime) {
-                    endTime = totalDuration;
-                }
-
-                // Calculate actual duration to process
-                const processDuration = endTime - startTime;
-
-                // Fixed step 30fps
-                const fps = 30;
-                const frameTime = 1 / fps;
-
-                // Start at trimmed start time
-                let currentTime = startTime;
-
-                // Trackers
-                this.video.currentTime = startTime;
-                let activeTracks = [];
-                let nextTrackId = 1;
-
-                console.log(`Starting loop: ${processDuration.toFixed(2)}s (${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s) @ ${fps}fps`);
-
-                while (currentTime < endTime) {
-                    if (this.canceled) throw new Error('Canceled');
-
-                    // 1. Seek
-                    await this.seekVideo(currentTime);
-
-                    // 2. Draw base frame
-                    ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
-
-                    // 3. Detect & Track (Only if model ready)
-                    if (window.faceDetector || (this.state.detectorType === 'mobile' && window.blazeDetector)) {
-                        try {
-                            const faces = await this.detectFaces(canvas);
-                            activeTracks = this.updateTracks(activeTracks, faces, nextTrackId);
-                            // Update ID counter if needed
-                            if (activeTracks.length > 0) nextTrackId = Math.max(...activeTracks.map(t => t.id)) + 1;
-                        } catch (e) { console.warn('Detection error:', e); }
+                return new Promise(async (resolve, reject) => {
+                    const totalDuration = this.video.duration;
+                    const startTime = this.state.trimStart || 0;
+                    let endTime = this.state.trimEnd;
+                    
+                    if (endTime === null || endTime === undefined || endTime > totalDuration || endTime <= startTime) {
+                        endTime = totalDuration;
+                    }
+                    
+                    // Setup Playback
+                    this.video.currentTime = startTime;
+                    this.video.volume = 1.0; 
+                    
+                    try {
+                        await this.video.play();
+                    } catch (e) {
+                        console.error('Play failed:', e);
+                        this.video.muted = true; 
+                        await this.video.play();
                     }
 
-                    // 4. Render Effects
-                    this.renderEffects(ctx, activeTracks);
+                    let activeTracks = [];
+                    let nextTrackId = 1;
+                    let isDetecting = false;
+                    let animationFrameId;
 
-                    // 5. Update UI
-                    this.updateProgress(currentTime, startTime, endTime, activeTracks.length);
+                    const processLoop = async () => {
+                        if (this.canceled) {
+                            this.video.pause();
+                            reject(new Error('Canceled'));
+                            return;
+                        }
 
-                    // 6. Memory & Loop Control
-                    currentTime += frameTime;
+                        const currentTime = this.video.currentTime;
 
-                    // GC Pause every 3 seconds
-                    if ((currentTime - startTime) > 0 && Math.floor(currentTime - startTime) % 3 === 0 && Math.abs((currentTime - startTime) % 1) < 0.1) {
-                        await new Promise(r => setTimeout(r, 20));
-                    }
-                }
+                        // Check End Condition
+                        if (currentTime >= endTime || this.video.ended || this.video.paused) {
+                            this.video.pause();
+                            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                            resolve();
+                            return;
+                        }
+
+                        // 1. Draw Current Frame
+                        ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+
+                        // 2. Async Detection (Non-blocking)
+                        if (!isDetecting && (window.faceDetector || (this.state.detectorType === 'mobile' && window.blazeDetector))) {
+                            isDetecting = true;
+                            this.detectFaces(canvas).then(faces => {
+                                activeTracks = this.updateTracks(activeTracks, faces, nextTrackId);
+                                if (activeTracks.length > 0) nextTrackId = Math.max(...activeTracks.map(t => t.id)) + 1;
+                                isDetecting = false;
+                            }).catch(err => {
+                                console.warn('Detection skipped:', err);
+                                isDetecting = false;
+                            });
+                        }
+
+                        // 3. Render Effects (using current Track State)
+                        this.renderEffects(ctx, activeTracks);
+
+                        // 4. Update UI
+                        const pct = Math.round(((currentTime - startTime) / (endTime - startTime)) * 100);
+                        this.ui.modalFill.style.width = `${pct}%`;
+                        this.ui.modalPercent.textContent = `${pct}%`;
+                        this.ui.modalSubtitle.textContent = `Grabando: ${formatTime(currentTime)} / ${formatTime(endTime)}`;
+
+                        // Loop
+                        animationFrameId = requestAnimationFrame(processLoop);
+                    };
+
+                    processLoop();
+                });
             }
 
             seekVideo(time) {
-                return new Promise(resolve => {
-                    const onSeek = () => {
-                        this.video.removeEventListener('seeked', onSeek);
-                        // Double RAF to ensure texture update on mobile
-                        requestAnimationFrame(() => requestAnimationFrame(resolve));
-                    };
-
-                    // Increased timeout for mobile (3000ms)
-                    const timeoutId = setTimeout(() => {
-                        this.video.removeEventListener('seeked', onSeek);
-                        console.warn(`Seek timeout at ${time}s - forcing continue`);
-                        resolve();
-                    }, 3000);
-
-                    this.video.addEventListener('seeked', () => {
-                        clearTimeout(timeoutId);
-                        onSeek();
-                    }, { once: true });
-
-                    this.video.currentTime = time;
-                });
+                return Promise.resolve();
             }
 
             async detectFaces(input) {
