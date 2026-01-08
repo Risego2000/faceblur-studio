@@ -1674,8 +1674,9 @@
                 </button>
                 <button class="upload-btn" id="btnShare"
                     style="flex: 1; background: var(--bg-hover); border: 1px solid var(--border); cursor: pointer;">
-                    📤 Compartir
+                    📤 Galería / Compartir
                 </button>
+
             </div>
 
             <button class="modal-cancel" id="cancelBtn">Cancelar</button>
@@ -3507,7 +3508,11 @@
                     throw new Error('No video blob available');
                 }
                 elements.modalTitle.textContent = '¡Video Listo!';
-                elements.modalSubtitle.textContent = 'Selecciona una opción:';
+                const isMobileOS = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                elements.modalSubtitle.textContent = isMobileOS ?
+                    'En móviles, usa "Galería" para guardar en tu carrete:' :
+                    'Selecciona una opción para guardar tu video:';
+
 
                 const fillParent = elements.modalFill.parentElement;
                 if (fillParent) fillParent.style.display = 'none';
@@ -3542,11 +3547,21 @@
                 if (shareBtn) {
                     shareBtn.onclick = async () => {
                         if (navigator.share) {
-                            const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
-                            try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
+                            const fileName = `faceanon_${Date.now()}.${ext}`;
+                            const file = new File([state.processedBlob], fileName, { type: blobType });
+                            try {
+                                await navigator.share({
+                                    files: [file],
+                                    title: 'FaceAnon Pro',
+                                    text: 'Video procesado con FaceAnon'
+                                });
+                            } catch (e) {
+                                console.warn('Share error:', e);
+                            }
                         } else {
-                            alert('Compartir no soportado en este dispositivo.');
+                            alert('La función de compartir no está disponible en este navegador.');
                         }
+
                     };
                 }
 
