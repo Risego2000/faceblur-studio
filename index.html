@@ -2070,8 +2070,8 @@
 
                 // Configure Detector
                 if (loadedModel === 'ssd') {
-                    // Balanced High Precision / Recall
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3, maxResults: 100 });
+                    // Maximum Sensitivity for SSD
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2, maxResults: 100 });
                 } else if (loadedModel === 'tiny') {
                     // Optimized input size for mobile performance vs accuracy
                     const tSize = isMobile ? 320 : 512;
@@ -2792,8 +2792,8 @@
 
                 if (refined.length > 0) {
                     state.lastKnownFaces = filterFaces(refined);
-                    // Much longer persistence on mobile to prevent gaps
-                    state.previewPersistenceCount = isMobile ? 30 : 20;
+                    // Much longer persistence on mobile/desktop to prevent gaps
+                    state.previewPersistenceCount = isMobile ? 60 : 45;
                 } else if (state.previewPersistenceCount > 0) {
                     state.previewPersistenceCount--;
                     // Keep using cached faces - this prevents frame gaps
@@ -3024,9 +3024,10 @@
                 const score = (d.detection && d.detection.score) ? d.detection.score : 0.5;
                 const box = (d.detection && d.detection.box) ? d.detection.box : null;
                 if (!box) return false;
-                // Minimum size to avoid noise (2% of video width)
-                const minDim = Math.min(video.videoWidth, video.videoHeight) * 0.02;
-                return score > 0.35 && box.width > minDim && box.height > minDim;
+                // Minimum size to avoid noise (0.5% of video dimension - more sensitive)
+                const minDim = Math.min(video.videoWidth, video.videoHeight) * 0.005;
+                // Sensitivity: Lowered from 0.35 to 0.2 to catch profiles and partial faces
+                return score > 0.2 && box.width > minDim && box.height > minDim;
             });
         }
 
@@ -3158,7 +3159,8 @@
             // TRACKING STATE
             let activeTracks = []; // { id: int, box: {}, lastSeen: 0, excluded: bool }
             let nextTrackId = 1;
-            const MAX_PERSISTENCE = 45; // 1.5 seconds persistence to bridge any detection gap
+            // Persistence: Increased to 3 seconds (90 frames at 30fps) to bridge heavy occlusions
+            const MAX_PERSISTENCE = 90;
 
             // Optimized Seek: Reduce delay from 50ms to 20ms or less
             const seekTo = (t) => new Promise(resolve => {
@@ -3257,7 +3259,7 @@
 
                     activeTracks.forEach(track => {
                         let bestMatch = null;
-                        let maxIoU = 0.1; // Min IoU to match
+                        let maxIoU = 0.05; // Lowered from 0.1 to be more tolerant of fast movement matching
 
                         faces.forEach((face, idx) => {
                             if (usedDetections.has(idx)) return;
