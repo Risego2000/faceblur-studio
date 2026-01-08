@@ -3330,22 +3330,37 @@
                 const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
                 // Audio Setup - Use 30fps for mobile compatibility
-                // Manual capture (0fps) doesn't work reliably on all mobile browsers
                 let stream = canvas.captureStream(30);
                 try {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     if (AudioContext) {
+                        // Use or create audio context
                         if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
                         const audioCtx = window.audioCtxGlobal;
                         if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-                        if (!video._audioSourceNode) {
-                            try { video._audioSourceNode = audioCtx.createMediaElementSource(video); } catch (e) { }
+                        // Create or reuse audio source
+                        let audioSource = video._audioSourceNode;
+                        if (!audioSource) {
+                            try {
+                                audioSource = audioCtx.createMediaElementSource(video);
+                                video._audioSourceNode = audioSource;
+                                console.log('✓ Created new audio source');
+                            } catch (e) {
+                                console.warn('Could not create audio source:', e);
+                            }
                         }
-                        if (video._audioSourceNode) {
+
+                        // Connect audio to recording stream
+                        if (audioSource) {
                             const dest = audioCtx.createMediaStreamDestination();
-                            video._audioSourceNode.connect(dest);
-                            if (dest.stream.getAudioTracks().length > 0) stream.addTrack(dest.stream.getAudioTracks()[0]);
+                            audioSource.connect(dest);
+                            audioSource.connect(audioCtx.destination); // Also to speakers
+
+                            if (dest.stream.getAudioTracks().length > 0) {
+                                stream.addTrack(dest.stream.getAudioTracks()[0]);
+                                console.log('✓ Audio track added to stream');
+                            }
                         }
                     }
                 } catch (e) { console.warn('Audio setup warning:', e); }
