@@ -3327,8 +3327,9 @@
                 canvas.height = state.videoHeight;
                 const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
-                // Audio Setup - Use manual frame capture (0fps = on-demand)
-                let stream = canvas.captureStream(0);
+                // Audio Setup - Use 30fps for mobile compatibility
+                // Manual capture (0fps) doesn't work reliably on all mobile browsers
+                let stream = canvas.captureStream(30);
                 try {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     if (AudioContext) {
@@ -3506,18 +3507,6 @@
                             else if (state.effect === 'blur') blurArea(ctx, x, y, w, h);
                             else solidArea(ctx, x, y, w, h);
                         });
-
-                        // CRITICAL: Capture frame for recording
-                        // Method 1: Use requestFrame if available (best for timing accuracy)
-                        const videoTrack = stream.getVideoTracks()[0];
-                        if (videoTrack && videoTrack.requestFrame) {
-                            videoTrack.requestFrame();
-                        } else {
-                            // Method 2: Force canvas update (fallback)
-                            // Draw a tiny pixel to force stream update
-                            const currentPixel = ctx.getImageData(0, 0, 1, 1);
-                            ctx.putImageData(currentPixel, 0, 0);
-                        }
 
                         // 4. UPDATE UI
                         const elapsedVideo = currentTime - startTime;
