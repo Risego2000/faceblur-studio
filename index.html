@@ -2040,7 +2040,8 @@
                             const detectorConfig = {
                                 runtime: 'tfjs',
                                 maxFaces: 100,
-                                modelType: 'short' // 'short' is better for typical webcam distances
+                                modelType: 'short',
+                                minDetectionConfidence: 0.3 // Lower threshold for better tracking
                             };
                             window.retinafaceModel = await faceDetection.createDetector(model, detectorConfig);
 
@@ -3337,7 +3338,44 @@
                     let detections;
 
                     if (state.detectorType === 'retinaface' && window.retinafaceModel) {
-                        const predictions = await window.retinafaceModel.estimateFaces(video, { flipHorizontal: false });
+                        // Check if it's the NEW detector (has .estimateFaces accepting config) or OLD BlazeFace
+                        // We can heuristics check referencing the method length or just try/catch or simple check
+                        // BUT simpler: check the global flag or object properties.
+
+                        let predictions;
+                        try {
+                            // Try New API format (object config)
+                            // If it's old blazeface, passing object as 2nd arg might fail or be treated as 'returnTensors' (truthy)
+                            // Safest is to check the loaded model type
+
+                            if (window.retinafaceModel.getCustomGLProgram) {
+                                // Old BlazeFace usually has this or similar tfjs props. 
+                                // Or we can check if window.faceDetection was used.
+                                // Safer: Call the old signature if we fell back.
+                                // Actually let's assume New API unless we flagged it as legacy.
+                                // But I didn't save the flag in state. 
+                                // Let's use runtime check.
+                                if (window.faceDetection && window.retinafaceModel instanceof window.faceDetection.FaceDetector) {
+                                    /* It's NOT an instance of that class directly usually, it's a wrapper. */
+                                }
+                            }
+
+                            // Universal Call Strategy
+                            // Old BlazeFace: estimateFaces(input, returnTensors=false, flipHorizontal=false, annotateBoxes=true)
+                            // New Detector: estimateFaces(input, estimationConfig?)
+
+                            if (window.faceDetection && window.retinafaceModel.locateFile === undefined) {
+                                // Likely New Detector
+                                predictions = await window.retinafaceModel.estimateFaces(video, { flipHorizontal: false });
+                            } else {
+                                // Likely Old BlazeFace
+                                predictions = await window.retinafaceModel.estimateFaces(video, false, false, false);
+                            }
+
+                        } catch (e) {
+                            console.warn('RetinaFace fail, retry with legacy sig', e);
+                            predictions = await window.retinafaceModel.estimateFaces(video, false, false, false);
+                        }
 
                         detections = predictions.map(pred => {
                             // Check format: New FaceDetection API returns .box { xMin, yMin, width, height }
