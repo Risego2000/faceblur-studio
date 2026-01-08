@@ -2033,19 +2033,28 @@
                 // Load based on selected model
                 try {
                     if (detectorType === 'retinaface') {
-                        // RetinaFace (Simulated via BlazeFace with high sensitivity for ALL faces)
+                        // Use MediaPipe Face Detector (via TensorFlow models) as "RetinaFace"
                         updateModelStatus('det', 30, 'Cargando RetinaFace...');
-                        if (typeof blazeface !== 'undefined') {
-                            window.retinafaceModel = await blazeface.load({
-                                maxFaces: 100, // Detect ALL faces (high limit)
-                                iouThreshold: 0.3,
-                                iouThreshold: 0.3,
-                                scoreThreshold: 0.35 // Balanced for high recall without much noise
-                            });
+                        if (window.faceDetection) {
+                            const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+                            const detectorConfig = {
+                                runtime: 'tfjs',
+                                maxFaces: 100,
+                                modelType: 'short' // 'short' is better for typical webcam distances
+                            };
+                            window.retinafaceModel = await faceDetection.createDetector(model, detectorConfig);
+
                             loadedModel = 'retinaface';
                             updateModelStatus('det', 100, 'RetinaFace Listo');
                         } else {
-                            throw new Error('RetinaFace no disponible');
+                            // Fallback to old Blazeface if library missing
+                            if (typeof blazeface !== 'undefined') {
+                                window.retinafaceModel = await blazeface.load(); // Default args
+                                loadedModel = 'retinaface'; // Use legacy mapping check
+                                updateModelStatus('det', 100, 'RetinaFace (Legacy)');
+                            } else {
+                                throw new Error('RetinaFace libs missing');
+                            }
                         }
                     } else if (detectorType === 'tiny') {
                         // Tiny Face Detector
@@ -3328,19 +3337,38 @@
                     let detections;
 
                     if (state.detectorType === 'retinaface' && window.retinafaceModel) {
-                        const predictions = await window.retinafaceModel.estimateFaces(video, false);
-                        detections = predictions.map(pred => ({
-                            detection: {
-                                box: {
+                        const predictions = await window.retinafaceModel.estimateFaces(video, { flipHorizontal: false });
+
+                        detections = predictions.map(pred => {
+                            // Check format: New FaceDetection API returns .box { xMin, yMin, width, height }
+                            // Old BlazeFace returns topLeft/bottomRight
+                            let box = {};
+                            if (pred.box) {
+                                // New API
+                                box = {
+                                    x: pred.box.xMin,
+                                    y: pred.box.yMin,
+                                    width: pred.box.width,
+                                    height: pred.box.height
+                                };
+                            } else if (pred.topLeft) {
+                                // Legacy BlazeFace
+                                box = {
                                     x: pred.topLeft[0],
                                     y: pred.topLeft[1],
                                     width: pred.bottomRight[0] - pred.topLeft[0],
                                     height: pred.bottomRight[1] - pred.topLeft[1]
+                                };
+                            }
+
+                            return {
+                                detection: {
+                                    box: box,
+                                    score: pred.score ? pred.score[0] : (pred.probability ? pred.probability[0] : 0.9)
                                 },
-                                score: pred.probability[0]
-                            },
-                            identity: null
-                        }));
+                                identity: null
+                            };
+                        });
                     } else if (state.detectorType === 'tiny' || state.detectorType === 'ssd') {
                         // Face-API Models
                         if (!state.recognitionReady) {
