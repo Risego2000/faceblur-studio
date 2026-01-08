@@ -3303,12 +3303,17 @@
                     }
                     const avgDiff = diffSum / (samples * 3);
 
-                    // Threshold: >15 avg pixel diff indicates significant change
-                    if (avgDiff > 25) {
-                        // Camera Cut Detected! Reset persistence immediately.
+                    // Threshold: >20 avg pixel diff indicates significant change (Lowered for faster reaction)
+                    if (avgDiff > 20) {
+                        // Camera Cut Detected! 
                         console.log(`Corte de cámara detectado en ${currentTime.toFixed(2)}s (Diff: ${avgDiff.toFixed(1)})`);
+
+                        // 1. Reset Persistence (Stop showing old faces)
                         lastKnownFaces = [];
                         persistenceCounter = 0;
+
+                        // 2. Reset Smoothing (Prevent new faces from 'sliding' from old positions)
+                        state.smoothedBoxes = {};
                     }
                 }
                 lastFramePixels = currentPixels;
