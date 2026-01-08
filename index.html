@@ -277,7 +277,8 @@
                 background: rgba(0, 0, 0, 0.9) !important;
                 backdrop-filter: blur(20px);
                 z-index: 10001 !important;
-                border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-top: none !important;
+                /* Removed grey profile */
             }
 
             body.video-active .video-canvas-wrapper {
@@ -924,7 +925,8 @@
             background: rgba(24, 24, 27, 0.50);
             /* 50% Translucent */
             backdrop-filter: blur(8px);
-            border: 1px solid var(--border);
+            border: none;
+            /* Removed grey profile */
             border-top: none;
             border-bottom-left-radius: 20px;
             border-bottom-right-radius: 20px;
@@ -2238,8 +2240,8 @@
 
                 // Configure Detector
                 if (loadedModel === 'ssd') {
-                    // Maximum Sensitivity for SSD
-                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2, maxResults: 100 });
+                    // Maximum Precision for SSD - 0.35 confidence to eliminate noise while keeping sensitivity
+                    window.faceDetector = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 100 });
                 } else if (loadedModel === 'tiny') {
                     // Optimized input size for mobile performance vs accuracy
                     const tSize = isMobile ? 320 : 512;
@@ -3006,7 +3008,7 @@
         }
 
         // EMA Smoothing logic to eliminate jitter for exact tracking
-        const SMOOTHING_FACTOR = isMobile ? 0.6 : 0.75;
+        // ADAPTIVE Smoothing logic for exact tracking
         function smoothBoundingBox(detection) {
             const rawBox = detection.detection.box;
             const personId = detection.identity ? (detection.identity.id || 'unknown') : 'unknown';
@@ -3014,10 +3016,17 @@
             if (!state.smoothedBoxes) state.smoothedBoxes = {};
             const prev = state.smoothedBoxes[personId] || rawBox;
 
-            // Adaptive Smoothing: if movement is large, follow faster to maintain exactness
+            // Compute velocity/distance to adapt smoothing
             const dist = Math.sqrt(Math.pow(rawBox.x - prev.x, 2) + Math.pow(rawBox.y - prev.y, 2));
-            const factor = dist > 20 ? 0.92 : SMOOTHING_FACTOR;
 
+            // Dynamic Factor: 
+            // - If moving fast (>15px): use high factor (0.95) for zero-lag tracking
+            // - If still: use low factor (0.4) for rock-solid stability
+            let factor = 0.4;
+            if (dist > 15) factor = 0.95;
+            else if (dist > 5) factor = 0.7;
+
+            // Apply smoothing for all 4 corners for exact fit
             const smoothed = {
                 x: prev.x + (rawBox.x - prev.x) * factor,
                 y: prev.y + (rawBox.y - prev.y) * factor,
@@ -3112,10 +3121,11 @@
                     });
                 }
 
-                // Fallback Espacial: si no hay match por biometría, buscamos por posición previa
+                // Fallback Espacial Estricto: si no hay match por biometría, buscamos por posición previa cercana
                 if (!bestMatch) {
                     const box = detection.detection.box;
-                    let minSpatialDist = video.videoWidth * 0.2; // 20% del ancho para ser independiente de resolución
+                    // Lowered tolerance to 10% of width for extreme precision
+                    let minSpatialDist = video.videoWidth * 0.1;
                     state.knownFaces.forEach(known => {
                         if (known.lastPos) {
                             const dist = Math.sqrt(Math.pow(box.x - known.lastPos.x, 2) + Math.pow(box.y - known.lastPos.y, 2));
@@ -3221,10 +3231,11 @@
                 const score = (d.detection && d.detection.score) ? d.detection.score : 0.5;
                 const box = (d.detection && d.detection.box) ? d.detection.box : null;
                 if (!box) return false;
-                // Minimum size to avoid noise (0.5% of video dimension - more sensitive)
+                // Minimum size to avoid noise
                 const minDim = Math.min(video.videoWidth, video.videoHeight) * 0.005;
-                // Sensitivity: Lowered from 0.35 to 0.2 to catch profiles and partial faces
-                return score > 0.2 && box.width > minDim && box.height > minDim;
+                // Threshold: Ultra precision requires higher confidence for SSD
+                const minScore = state.detectorType === 'ssd' ? 0.4 : 0.25;
+                return score > minScore && box.width > minDim && box.height > minDim;
             });
         }
 
@@ -3330,6 +3341,16 @@
                 elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
                 elements.modalFill.style.width = '0%'; // Reset for Phase 2
                 await renderVideoPass(startTime, endTime);
+
+                // Clear memory immediately after rendering
+                analysisData = [];
+
+                // FINAL UI UPDATE (Moved here to ensure it runs when Phase 2 promise resolves)
+                if (state.processedBlob && state.processedBlob.size > 0) {
+                    showExportSuccess();
+                } else if (!state.processingCanceled) {
+                    throw new Error('El video generado falló o está vacío.');
+                }
 
             } catch (e) {
                 console.error('Processing error:', e);
@@ -3473,7 +3494,7 @@
 
                     activeTracks.forEach(track => {
                         let bestMatch = null;
-                        let maxIoU = 0.05; // Lowered from 0.1 to be more tolerant of fast movement matching
+                        let maxIoU = 0.4; // High threshold for exact tracking identity matching
 
                         faces.forEach((face, idx) => {
                             if (usedDetections.has(idx)) return;
@@ -3584,7 +3605,7 @@
 
         // Phase 2: Play and Record (Streaming) - No Memory Buffer
         async function renderVideoPass(startTime, endTime) {
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
                 const canvas = document.createElement('canvas');
                 canvas.width = state.videoWidth;
                 canvas.height = state.videoHeight;
@@ -3602,6 +3623,7 @@
                         // Create context only once if possible or manage lifecycle
                         if (!window.audioCtxGlobal) window.audioCtxGlobal = new AudioContext();
                         const audioCtx = window.audioCtxGlobal;
+                        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
                         // Need a source node. Note: createMediaElementSource can only be called once per element.
                         // We store it on the video element wrapper or global map
@@ -3645,82 +3667,47 @@
                 recorder.onstop = () => {
                     try {
                         console.log('Recorder stopped successfully');
+                        elements.modalSubtitle.textContent = 'Fase 2/2: Construyendo archivo final...';
                         const blobType = recorder.mimeType || mimeType;
                         state.processedBlob = new Blob(chunks, { type: blobType });
 
-                        if (state.processedBlob.size === 0) {
+                        // Stop all tracks to release resources
+                        if (stream) {
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+
+                        if (state.processedBlob.size === 0 && !state.processingCanceled) {
                             throw new Error('El video generado está vacío. Prueba con un rango menor.');
                         }
 
-                        // Updating UI to Success State
-                        elements.modalTitle.textContent = '¡Video Listo!';
-                        elements.modalSubtitle.textContent = 'Selecciona una opción:';
-
-                        const fillParent = elements.modalFill.parentElement;
-                        if (fillParent) fillParent.style.display = 'none';
-                        if (elements.modalPercent) elements.modalPercent.style.display = 'none';
-
-                        const spinner = document.querySelector('.modal-spinner');
-                        if (spinner) spinner.style.display = 'none';
-
-                        elements.cancelBtn.textContent = 'Cerrar';
-
-                        const actions = document.getElementById('modalActions');
-                        if (actions) actions.style.display = 'flex';
-
-                        // Bind Download
-                        const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
-                        const dlBtn = document.getElementById('btnDownload');
-                        if (dlBtn) {
-                            dlBtn.onclick = () => {
-                                const url = URL.createObjectURL(state.processedBlob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `faceanon_pro_${Date.now()}.${ext}`;
-                                a.click();
-                                setTimeout(() => URL.revokeObjectURL(url), 10000);
-                            };
-                        }
-
-                        // Bind Share
-                        const shareBtn = document.getElementById('btnShare');
-                        if (shareBtn) {
-                            shareBtn.onclick = async () => {
-                                if (navigator.share) {
-                                    const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
-                                    try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
-                                } else {
-                                    alert('Compartir no soportado en este dispositivo.');
-                                }
-                            };
-                        }
-
-                        elements.processBtn.disabled = false;
-                        elements.exportBtn.disabled = false;
-
-                        // Reset Audio/Video for user
-                        video.muted = false;
-                        video.volume = 1.0;
+                        state.isProcessing = false;
                         resolve();
                     } catch (err) {
                         console.error('Error finalizando video:', err);
-                        alert(err.message);
-                        elements.modal.classList.remove('active');
                         reject(err);
                     }
                 };
 
-                // Start
-                recorder.start();
+                // Start with smaller slices to avoid one massive data event at the end
+                recorder.start(1000);
 
-                // Safety Resolution: If recorder doesn't stop for any reason after end
+                // Safety Resolution: Real Heartbeat check
                 let safetyResolved = false;
                 const forceResolve = () => {
                     if (safetyResolved) return;
-                    safetyResolved = true;
                     console.log('Safety Resolution triggered');
                     if (recorder.state === 'recording') recorder.stop();
-                    resolve();
+
+                    // Wait for the onstop to actually produce the blob
+                    const waitAndResolve = () => {
+                        if (state.processedBlob || state.processingCanceled) {
+                            safetyResolved = true;
+                            resolve();
+                        } else {
+                            setTimeout(waitAndResolve, 500);
+                        }
+                    };
+                    waitAndResolve();
                 };
 
                 // Playback Logic
@@ -3739,14 +3726,19 @@
                             return;
                         }
 
-                        // Stop Condition
-                        if (video.currentTime >= endTime || video.paused || video.ended || state.processingCanceled) {
-                            console.log('Export Loop: End reached or canceled');
+                        // Stop Condition: Robust end detection for long videos (inclusive 0.1s margin)
+                        if (video.currentTime >= endTime - 0.1 || video.paused || video.ended || state.processingCanceled) {
+                            console.log('Export Loop: End reached or canceled at', video.currentTime);
+                            elements.modalSubtitle.textContent = 'Fase 2/2: Finalizando archivo...';
                             if (recorder.state === 'recording') {
                                 recorder.stop();
                             }
-                            // Call safety resolve after a short delay if onstop hasn't fired
-                            setTimeout(forceResolve, 1500);
+
+                            // Let the onstop handle resolution, but ensure it happens
+                            setTimeout(() => {
+                                if (!safetyResolved) forceResolve();
+                            }, 3000);
+
                             video.pause();
                             return;
                         }
@@ -3777,7 +3769,7 @@
                         // Apply Effects
                         if (frameData && frameData.faces && frameData.faces.length > 0) {
                             frameData.faces.forEach(face => {
-                                if (face.excluded) return;
+                                if (!face || face.excluded || !face.box) return;
                                 const box = face.box;
 
                                 // Calc coordinates
@@ -3811,6 +3803,60 @@
         // Helper to check if PWA is already installed
         function isPwaInstalled() {
             return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        }
+
+        // Export Success UI
+        function showExportSuccess() {
+            elements.modalTitle.textContent = '¡Video Listo!';
+            elements.modalSubtitle.textContent = 'Selecciona una opción:';
+
+            const fillParent = elements.modalFill.parentElement;
+            if (fillParent) fillParent.style.display = 'none';
+            if (elements.modalPercent) elements.modalPercent.style.display = 'none';
+
+            const spinner = document.querySelector('.modal-spinner');
+            if (spinner) spinner.style.display = 'none';
+
+            elements.cancelBtn.textContent = 'Cerrar';
+
+            const actions = document.getElementById('modalActions');
+            if (actions) actions.style.display = 'flex';
+
+            const blobType = state.processedBlob.type || 'video/webm';
+            const ext = blobType.includes('mp4') ? 'mp4' : 'webm';
+
+            // Bind Download
+            const dlBtn = document.getElementById('btnDownload');
+            if (dlBtn) {
+                dlBtn.onclick = () => {
+                    const url = URL.createObjectURL(state.processedBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `faceanon_pro_${Date.now()}.${ext}`;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                };
+            }
+
+            // Bind Share
+            const shareBtn = document.getElementById('btnShare');
+            if (shareBtn) {
+                shareBtn.onclick = async () => {
+                    if (navigator.share) {
+                        const file = new File([state.processedBlob], `faceanon_${Date.now()}.${ext}`, { type: blobType });
+                        try { await navigator.share({ files: [file], title: 'FaceAnon Export' }); } catch (e) { }
+                    } else {
+                        alert('Compartir no soportado en este dispositivo.');
+                    }
+                };
+            }
+
+            elements.processBtn.disabled = false;
+            elements.exportBtn.disabled = false;
+
+            // Reset Audio/Video for user
+            video.muted = false;
+            video.volume = 1.0;
         }
 
         // Export video
