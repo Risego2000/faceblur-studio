@@ -3379,6 +3379,10 @@
                 let currentTime = startTime;
                 const startRealTime = performance.now();
 
+                // BLOCK PROCESSING for memory management
+                const BLOCK_DURATION = 5.0; // Process in 5-second blocks
+                let blockStartTime = startTime;
+
                 // Tracking state
                 let activeTracks = [];
                 let nextTrackId = 1;
@@ -3402,9 +3406,17 @@
                     video.currentTime = t;
                 });
 
-                // Main processing loop
+                // Main processing loop with block GC
                 try {
                     while (currentTime < endTime && !state.processingCanceled) {
+                        // Check if we need a GC pause (every 5 seconds)
+                        if (currentTime - blockStartTime >= BLOCK_DURATION) {
+                            // Yield to main thread for garbage collection
+                            await new Promise(r => setTimeout(r, 100));
+                            blockStartTime = currentTime;
+                            console.log(`GC pause at ${formatTime(currentTime)}`);
+                        }
+
                         await seekTo(currentTime);
 
                         // 1. DETECT FACES
