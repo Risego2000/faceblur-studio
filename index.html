@@ -1412,6 +1412,39 @@
             }
         }
 
+        .perf-warning {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(234, 179, 8, 0.95);
+            color: #000;
+            padding: 12px 20px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 700;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes toastIn {
+            from {
+                transform: translate(-50%, -100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translate(-50%, 0);
+                opacity: 1;
+            }
+        }
+
         /* Overlay Controls Styles */
         .overlay-row {
             display: flex;
@@ -1846,7 +1879,8 @@
             trackingEnabled: true,
             highlightedPersonId: null,
             previewPersistenceCount: 0,
-            isLoadingModel: false
+            isLoadingModel: false,
+            perfWarningShown: false
         };
 
         // Register Service Worker for PWA
@@ -2300,10 +2334,10 @@
 
             // Model preference with descriptions
             const modelDescriptions = {
-                'auto': 'Selección automática según dispositivo',
-                'ssd': 'Equilibrado: Buena precisión y velocidad (2MB)',
-                'tiny': 'Rápido: Ideal para móviles y tiempo real (1MB)',
-                'mobile': 'Ultra-Ligero: Máximo rendimiento móvil (200KB)'
+                'auto': 'Modo inteligente: El sistema detecta tu potencia y elige el mejor balance.',
+                'ssd': 'PRO PRECISIÓN: Máxima fiabilidad. Detecta caras lejanas, perfiles y condiciones difíciles. RECOMENDADO: Para procesado final en PC.',
+                'tiny': 'SÚPER RÁPIDO: Balance ideal velocidad/precisión. Detecta caras cercanas/medias. RECOMENDADO: Uso fluido en móviles modernos.',
+                'mobile': 'ULTRA LIGERO: Bajo consumo (200KB). Ideal para hardware antiguo o batería baja. RECOMENDADO: Caras grandes frente a cámara.'
             };
 
             elements.modelBtns.forEach(btn => {
@@ -2804,8 +2838,30 @@
             } catch (e) {
                 console.error('Background detection error:', e);
             } finally {
+                const duration = Date.now() - detectStartTime;
                 isDetecting = false;
+
+                // PERFORMANCE MONITORING
+                if (!state.isProcessing && !state.perfWarningShown && duration > (isMobile ? 1200 : 800)) {
+                    if (state.detectorType === 'ssd' || (state.detectorType === 'tiny' && isMobile)) {
+                        showPerformanceWarning();
+                        state.perfWarningShown = true;
+                    }
+                }
             }
+        }
+
+        function showPerformanceWarning() {
+            const warning = document.createElement('div');
+            warning.className = 'perf-warning';
+            const msg = isMobile ? '⚠️ Sistema lento: Prueba el modelo "Mobile" para mayor fluidez.' : '⚠️ Rendimiento bajo: Prueba el modelo "Tiny" o "Mobile" para ir más rápido.';
+            warning.innerHTML = msg;
+            document.body.appendChild(warning);
+            setTimeout(() => {
+                warning.style.opacity = '0';
+                warning.style.transition = 'opacity 0.8s ease';
+                setTimeout(() => warning.remove(), 800);
+            }, 6000);
         }
 
         // EMA Smoothing logic to eliminate jitter for exact tracking
