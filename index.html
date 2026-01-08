@@ -957,8 +957,9 @@
         }
 
         .ctrl-btn {
-            background: var(--bg-hover);
-            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.05);
+            /* Very subtle to detect touch area but no grey profile */
+            border: none;
             border-radius: 12px;
             color: white;
             font-size: 14px;
@@ -1257,6 +1258,7 @@
                 width: 38px;
                 height: 38px;
                 font-size: 14px;
+                border: none !important;
             }
 
             .time-display {
