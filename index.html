@@ -3316,6 +3316,7 @@
         let analysisData = [];
 
         // Main Process Function - Two Pass System (Analyze -> Render)
+        // Main Process Function - Two Pass System (Analyze -> Render)
         async function processVideo() {
             if (state.isProcessing || !state.modelReady) return;
 
@@ -3335,20 +3336,16 @@
                 elements.cancelBtn.style.display = 'block';
                 elements.cancelBtn.textContent = 'Cancelar';
 
-                // Reset cancel handler: Unify logic for cancel button
+                // Reset cancel handler
                 elements.cancelBtn.onclick = () => {
                     console.log('User requested cancellation');
                     state.processingCanceled = true;
-                    state.isProcessing = false;
-                    video.pause();
-                    elements.modal.classList.remove('active');
+                    // We don't immediately hide modal here, we let the loop break handle it
+                    // to ensure clean resource release
                 };
 
                 const startTime = state.trimStart || 0;
                 const endTime = state.trimEnd || video.duration;
-                // STANDARD PROCESSING (Two Pass: Analyze All -> Render All)
-                // Reverted from chunking to ensure 100% fluid video without cuts/glitches.
-                // The previous mobile hangs are solved by the 'seek timeout' and 'visible video' fixes.
 
                 // PHASE 1: ANALYSIS
                 elements.modalSubtitle.textContent = 'Fase 1/2: Analizando rostros...';
@@ -3359,7 +3356,9 @@
 
                 // PHASE 2: RENDERING
                 elements.modalSubtitle.textContent = 'Fase 2/2: Generando video final...';
-                elements.modalFill.style.width = '50%'; // Start Phase 2 at 50%
+                elements.modalFill.style.width = '50%';
+                elements.modalPercent.textContent = '50%';
+
                 await renderVideoPass(startTime, endTime);
 
                 // Clear memory
@@ -3376,12 +3375,18 @@
                 console.error('Processing error:', e);
                 state.isProcessing = false;
 
-                if (e.message === 'Cancelado por usuario') {
+                // Cleanup
+                analysisData = [];
+
+                if (e.message === 'Cancelado por usuario' || state.processingCanceled) {
                     elements.modal.classList.remove('active');
+                    video.pause();
                 } else {
                     elements.modalTitle.textContent = 'Error';
                     elements.modalSubtitle.textContent = e.message;
                     elements.processBtn.disabled = false;
+                    elements.cancelBtn.textContent = 'Cerrar';
+                    elements.cancelBtn.onclick = () => elements.modal.classList.remove('active');
                 }
             }
         }
@@ -3685,13 +3690,20 @@
                 processingRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
                 processingRecorder.ondataavailable = e => { if (e.data.size > 0) processingChunks.push(e.data); };
 
-                processingRecorder.onstop = () => {
+                // Finalization helper to ensuring robust saving even on Safari
+                const finalizeExport = () => {
+                    if (state.processedBlob) { resolve(); return; } // Already handled
                     try {
                         const blob = new Blob(processingChunks, { type: processingRecorder.mimeType });
                         state.processedBlob = blob;
                         if (processingStream) processingStream.getTracks().forEach(t => t.stop());
                         resolve();
                     } catch (e) { reject(e); }
+                };
+
+                processingRecorder.onstop = () => {
+                    console.log('Recorder stopped event');
+                    finalizeExport();
                 };
 
                 processingRecorder.start(100); // Start recording
@@ -3708,15 +3720,19 @@
                         if (state.processingCanceled) {
                             if (processingRecorder.state === 'recording') processingRecorder.stop();
                             video.pause();
-                            reject(new Error('Cancelado'));
+                            reject(new Error('Cancelado por usuario'));
                             return;
                         }
 
-                        // End condition for the render loop
+                        // End condition
                         if (video.currentTime >= endTime - 0.05 || video.paused || video.ended) {
+                            console.log('Render Pass finished');
                             if (processingRecorder.state === 'recording') processingRecorder.stop();
                             video.pause();
-                            return; // The onstop event will resolve the promise
+
+                            // Safari Fallback: Force resolution if onstop fails
+                            setTimeout(finalizeExport, 1000);
+                            return;
                         }
 
                         // Draw video frame
@@ -3751,7 +3767,7 @@
 
                         // Update Progress (Phase 2: 50-100%)
                         const renderPct = ((video.currentTime - startTime) / duration) * 50;
-                        const totalPct = Math.min(100, 50 + Math.round(renderPct)); // Start at 50% for phase 2
+                        const totalPct = Math.min(100, 50 + Math.round(renderPct));
 
                         elements.modalFill.style.width = totalPct + '%';
                         elements.modalPercent.textContent = totalPct + '%';
