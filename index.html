@@ -218,7 +218,7 @@
             background: var(--bg-dark);
         }
 
-        /* Fullscreen mobile mode when video is active */
+        /* Immersive Fullscreen Mobile Mode (Active when video is loaded) */
         @media (max-width: 768px) {
             body.video-active header {
                 display: none !important;
@@ -227,18 +227,28 @@
             body.video-active .workspace {
                 height: 100dvh !important;
                 padding: 0 !important;
+                background-image: none !important;
+                background: #000 !important;
             }
 
             body.video-active .video-card {
                 border-radius: 0 !important;
                 margin: 0 !important;
                 border: none !important;
+                background: #000 !important;
             }
 
             body.video-active .video-controls {
                 border-radius: 0 !important;
-                padding: 10px 16px !important;
-                background: rgba(0, 0, 0, 0.8) !important;
+                padding: 12px 16px !important;
+                /* Eliminates the bottom black gap and respects iPhone home indicator */
+                padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+                background: rgba(0, 0, 0, 0.85) !important;
+                backdrop-filter: blur(15px);
+                border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-left: none !important;
+                border-right: none !important;
+                border-bottom: none !important;
             }
         }
 
