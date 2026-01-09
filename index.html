@@ -301,81 +301,65 @@
         .mode-option:hover {
             background: var(--bg-hover);
             border-color: var(--border-hover);
+        }
 
-            /* Detection/Tracking */
-            .mode-option {
-                /* ... */
-                border: none;
-                /* Removed border */
-                /* ... */
-            }
+        /* Detection/Tracking */
+        .mode-option.active {
+            outline: 2px solid var(--primary);
+        }
 
-            .mode-option.active {
-                /* border-color: var(--primary); Removed */
-                /* box-shadow: inset 0 0 0 1px var(--primary); Removed border shadow */
-                outline: 2px solid var(--primary);
-            }
+        /* Preview Toggle */
+        .preview-btn {
+            flex: 1;
+            padding: 8px 6px;
+            background: var(--bg-dark);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-            /* Preview Toggle */
-            .preview-btn {
-                flex: 1;
-                padding: 8px 6px;
-                background: var(--bg-dark);
-                border: none;
-                /* Removed border */
-                border-radius: 8px;
-                color: var(--text-muted);
-                font-size: 12px;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
+        .preview-btn:hover {
+            background: var(--bg-hover);
+        }
 
-            .preview-btn:hover {
-                background: var(--bg-hover);
-                /* Instead of border color */
-            }
+        .preview-btn.active {
+            border: none;
+            outline: 2px solid var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text);
+        }
 
-            .preview-btn.active {
-                border: none;
-                /* Ensure no border */
-                outline: 2px solid var(--primary);
-                /* Outline for active state */
-                background: rgba(99, 102, 241, 0.1);
-                color: var(--text);
-            }
-
-            /* Upload Area */
-            .upload-area {
-                width: 100%;
-                max-width: 440px;
-                padding: 60px 40px;
-                border: none;
-                /* Removed border dashed */
-                /* Use a subtle background diff or shadow instead? Or just keep it clean */
-                background: var(--bg-card);
-                border-radius: 24px;
-                text-align: center;
-                cursor: pointer;
-                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: var(--shadow-lg);
-                /* Optional: Add an outline for structure without "border" look */
-                outline: 2px dashed var(--border);
-            }
-
-            .upload-area:hover,
-            .upload-area.dragover {
-                outline-color: var(--primary);
-                background: rgba(99, 102, 241, 0.03);
-                transform: scale(1.01);
-            }
-
+        /* Upload Area */
+        .upload-area {
+            width: 100%;
+            max-width: 440px;
+            padding: 60px 40px;
+            border: none;
+            background: var(--bg-card);
             border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
             cursor: pointer;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            background: var(--bg-card);
             box-shadow: var(--shadow-lg);
+            outline: 2px dashed var(--border);
+            /* Center horizontally */
+            margin: 0 auto;
         }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            outline-color: var(--primary);
+            background: rgba(99, 102, 241, 0.03);
+            transform: scale(1.01);
+        }
+
 
         @media (max-width: 767px) {
             .upload-area {
@@ -466,6 +450,33 @@
             display: none;
         }
 
+        .app {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #uploadArea {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         @media (max-width: 768px) {
             .desktop-only {
                 display: none !important;
@@ -478,18 +489,8 @@
             .upload-area {
                 display: none;
             }
-
-            /* Override classic */
-
-            /* Expand Wrapper */
-            #uploadArea {
-                width: 100%;
-                height: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
         }
+
 
         /* Drag Over Handlers on Wrapper */
         #uploadArea.dragover .desktop-only {
