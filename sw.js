@@ -1,9 +1,9 @@
 /**
- * FaceAnon Pro - Service Worker v8
+ * FaceAnon Pro - Service Worker v9
  * Enables full offline functionality for local AI processing.
  */
 
-const CACHE_NAME = 'faceanon-pro-v8';
+const CACHE_NAME = 'faceanon-pro-v9';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
