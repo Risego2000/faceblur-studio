@@ -3721,8 +3721,96 @@
 
 
 
-        // Start app
+
+        // --- SELF-HEALING & ROBUSTNESS ---
+
+        // Global Error Handler to catch "sudden death" issues
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            console.error('Global Error:', msg, error);
+            showRepairUI(`Error Interno: ${msg}`);
+            return false;
+        };
+
+        window.onunhandledrejection = function (event) {
+            console.error('Unhandled Rejection:', event.reason);
+            // Don't show UI for every small rejection, but log it.
+            // If it's a critical one affecting the main loop, we might want to.
+            if (event.reason && event.reason.toString().includes('filterFaces')) {
+                showRepairUI('Error Crítico de Lógica detectado.');
+            }
+        };
+
+        function showRepairUI(msg) {
+            const statusEl = document.getElementById('mainStatusText');
+            if (statusEl) statusEl.innerText = '⚠️ Error Detectado';
+
+            // Create or show a floating repair button
+            let btn = document.getElementById('criticalRepairBtn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.id = 'criticalRepairBtn';
+                btn.innerHTML = '🛠️ Reparar / Reinstalar App';
+                btn.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:9999; background:#ef4444; color:white; padding:12px 24px; border-radius:50px; font-weight:bold; box-shadow:0 10px 25px rgba(0,0,0,0.5); border:2px solid white; animation: pulse 2s infinite;';
+
+                const style = document.createElement('style');
+                style.innerHTML = '@keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } 100% { transform: translateX(-50%) scale(1); } }';
+                document.head.appendChild(style);
+
+                btn.onclick = hardResetApp;
+                document.body.appendChild(btn);
+            }
+            // Add a small tooltip with the specific error
+            btn.title = msg;
+        }
+
+        async function hardResetApp() {
+            if (!confirm('Esto borrará la memoria caché de la aplicación y recargará la versión más reciente. ¿Continuar?')) return;
+
+            document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#000;color:white;font-family:sans-serif;"><h1>♻️ Reinstalando...</h1><p>Limpiando caché y service workers...</p></div>';
+
+            try {
+                // 1. Unregister Service Worker
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+
+                // 2. Clear Caches
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(key => caches.delete(key)));
+                }
+
+                // 3. Clear Local Storage
+                localStorage.clear();
+                sessionStorage.clear();
+
+                // 4. Force Reload from Server
+                setTimeout(() => {
+                    window.location.reload(true);
+                }, 1000);
+
+            } catch (e) {
+                alert('Error al limpiar. Intenta borrar los datos del sitio manualmente.');
+                window.location.reload();
+            }
+        }
+
+        // Add repair button to settings/menu as well for manual access
+        if (elements.sidebar) {
+            const repairItem = document.createElement('button');
+            repairItem.className = 'btn-secondary';
+            repairItem.innerHTML = '⚠️ Forzar Reinstalación';
+            repairItem.style.cssText = 'width:100%; margin-top:20px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); padding:10px; border-radius:8px; cursor:pointer; font-size:11px;';
+            repairItem.onclick = hardResetApp;
+            elements.sidebar.appendChild(repairItem);
+        }
+
+        // Initialize state
         init();
+
     </script>
 </body>
 
