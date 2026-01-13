@@ -3798,14 +3798,17 @@
             }
         }
 
-        // Add repair button to settings/menu as well for manual access
-        if (elements.sidebar) {
+        // Add repair button to MAIN OVERLAY (more visible)
+        const overlayParams = elements.aiStatus ? elements.aiStatus.querySelector('.overlay-params') : null;
+        if (overlayParams) {
             const repairItem = document.createElement('button');
-            repairItem.className = 'btn-secondary';
+            repairItem.id = 'manualRepairBtn';
             repairItem.innerHTML = '⚠️ Forzar Reinstalación';
-            repairItem.style.cssText = 'width:100%; margin-top:20px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); padding:10px; border-radius:8px; cursor:pointer; font-size:11px;';
+            repairItem.style.cssText = 'width:100%; margin-top:12px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); padding:8px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;';
             repairItem.onclick = hardResetApp;
-            elements.sidebar.appendChild(repairItem);
+
+            // Insert at the end of params
+            overlayParams.appendChild(repairItem);
         }
 
         // Initialize state
