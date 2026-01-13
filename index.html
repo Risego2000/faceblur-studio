@@ -2666,6 +2666,101 @@
             console.log('App state reset for new video');
         }
 
+
+        // --- RESTORED HELPER FUNCTIONS ---
+
+        async function identifyFaces(detections) {
+            // Simplified Identification Logic
+            if (!state.knownFaces) state.knownFaces = [];
+
+            return detections.map(d => {
+                const descriptor = d.descriptor;
+                if (!descriptor) return { detection: d, identity: null };
+
+                let bestMatch = null;
+                let minDist = 0.6; // Threshold matches FACE_RECOGNITION_THRESHOLD
+
+                state.knownFaces.forEach(person => {
+                    const dist = faceapi.euclideanDistance(descriptor, person.descriptor);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        bestMatch = person;
+                    }
+                });
+
+                // If found, return identity. If not, maybe create new? 
+                // For now, we just return null identity if not matched, 
+                // OR we could auto-create identities here if we want to track everyone.
+                // Let's auto-create for "People List" feature
+                if (!bestMatch) {
+                    const newId = 'person_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                    const newPerson = {
+                        id: newId,
+                        descriptor: descriptor,
+                        name: `Persona ${state.knownFaces.length + 1}`,
+                        excluded: false,
+                        firstSeen: Date.now()
+                    };
+                    state.knownFaces.push(newPerson);
+                    bestMatch = newPerson;
+                    updatePeopleListUI(); // Helper to refresh UI list
+                }
+
+                return {
+                    detection: d,
+                    identity: bestMatch
+                };
+            });
+        }
+
+        function filterFaces(detections) {
+            if (!detections) return [];
+            return detections.filter(d => {
+                // If identity exists and is excluded (un-blurred), filter it out
+                // BUT: In "FaceBlur", we usually want to blur everyone EXCEPT excluded ones.
+                // So if "excluded" is true, we REMOVE it from the list of faces-to-blur.
+                if (d.identity && d.identity.excluded === true) {
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // UI Helper for People List (Basic implementation)
+        function updatePeopleListUI() {
+            if (!elements.peopleList) return;
+            // Throttled UI update
+            if (window._peopleListTimeout) clearTimeout(window._peopleListTimeout);
+            window._peopleListTimeout = setTimeout(() => {
+                elements.peopleList.innerHTML = '';
+                state.knownFaces.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'person-item';
+                    div.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px; background:rgba(255,255,255,0.05); margin-bottom:4px; border-radius:6px; font-size:11px;';
+
+                    const dot = document.createElement('div');
+                    dot.style.cssText = `width:8px; height:8px; border-radius:50%; background:${p.excluded ? '#10b981' : '#f43f5e'}`;
+
+                    const name = document.createElement('span');
+                    name.innerText = p.name;
+                    name.style.flex = '1';
+
+                    const toggle = document.createElement('button');
+                    toggle.innerText = p.excluded ? '👁️ Ver' : '🙈 Tapar';
+                    toggle.style.cssText = 'border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;';
+                    toggle.onclick = () => {
+                        p.excluded = !p.excluded;
+                        updatePeopleListUI();
+                    };
+
+                    div.appendChild(dot);
+                    div.appendChild(name);
+                    div.appendChild(toggle);
+                    elements.peopleList.appendChild(div);
+                });
+            }, 1000);
+        }
+
         let isDetecting = false;
         let lastDetectionTime = 0;
         let detectStartTime = 0;
