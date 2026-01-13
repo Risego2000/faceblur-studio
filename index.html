@@ -1927,7 +1927,15 @@
                 return;
             }
 
+            // Absolute path resolution for reliability
+            const getBaseUrl = () => {
+                const path = window.location.pathname;
+                const base = path.substring(0, path.lastIndexOf('/') + 1);
+                return `${window.location.origin}${base}models/`;
+            };
+
             const modelUrls = [
+                getBaseUrl(),
                 './models/',
                 'https://justadudewhohacks.github.io/face-api.js/models/'
             ];
@@ -2044,6 +2052,24 @@
                     updateModelStatus('rec', 0, 'No Disponible');
                 }
 
+                // --- STAGE 3: WARMUP & VERIFY ---
+                // Run a dummy detection to ensure the model is actually executable
+                // This catches issues where weights loaded but the backend (WebGL) is broken
+                try {
+                    const dummyCanvas = document.createElement('canvas');
+                    dummyCanvas.width = 100;
+                    dummyCanvas.height = 100;
+                    if (state.detectorType === 'ssd' || state.detectorType === 'tiny') {
+                        await faceapi.detectAllFaces(dummyCanvas, window.faceDetector);
+                    } else if (state.detectorType === 'mobile' && window.blazeDetector) {
+                        await window.blazeDetector.estimateFaces(dummyCanvas);
+                    }
+                    console.log('✓ AI Warmup Successful');
+                } catch (e) {
+                    console.error('Warmup failed:', e);
+                    throw new Error('El motor de IA falló al iniciarse (Warmup Error). Intenta recargar.');
+                }
+
                 // Finalize
                 state.modelReady = true;
                 const modelNames = {
@@ -2060,7 +2086,7 @@
                 console.error('loadAI failed:', err);
                 updateAIStatus(false);
                 const statusEl = document.getElementById('mainStatusText');
-                if (statusEl) statusEl.innerText = 'Error al cargar IA';
+                if (statusEl) statusEl.innerText = `Error: ${err.message || 'Carga IA Fallida'}`;
             } finally {
                 state.isLoadingModel = false;
                 if (elements.modelBtns) elements.modelBtns.forEach(b => b.disabled = false);
